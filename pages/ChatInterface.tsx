@@ -25,9 +25,11 @@ const ChatInterface = () => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [interimTranscript, setInterimTranscript] = useState('');
   const [finalTranscript, setFinalTranscript] = useState('');
+  const [showSendPrompt, setShowSendPrompt] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -69,6 +71,11 @@ const ChatInterface = () => {
       let interim = '';
       let final = '';
 
+      // Clear any existing silence timer
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+      }
+
       // Loop through all results
       for (let i = 0; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
@@ -87,6 +94,15 @@ const ChatInterface = () => {
       } else {
         setInterimTranscript(interim);
       }
+
+      // Set a timer to auto-stop after 2 seconds of silence
+      silenceTimerRef.current = setTimeout(() => {
+        if (recognitionRef.current) {
+          console.log('🤫 Silence detected, stopping mic...');
+          recognitionRef.current.stop();
+          setShowSendPrompt(true);
+        }
+      }, 2000); // 2 seconds of silence
     };
 
     recognition.onerror = (event: any) => {
@@ -106,6 +122,12 @@ const ChatInterface = () => {
     recognition.onend = () => {
       console.log('🎤 Listening stopped');
       setIsListening(false);
+      
+      // Clear silence timer
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+      }
+      
       // Save everything to input
       const combined = (finalTranscript + interimTranscript).trim();
       if (combined) {
@@ -123,6 +145,10 @@ const ChatInterface = () => {
   const handleSendMessage = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!input.trim()) return;
+    
+    // Hide send prompt after sending
+    setShowSendPrompt(false);
+    
     if (!apiKey) {
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
@@ -328,8 +354,32 @@ const ChatInterface = () => {
               <Send size={20} />
             </button>
           </form>
+          {showSendPrompt && !isListening && input.trim() && (
+            <div className="mb-3 p-3 bg-indigo-900/20 border border-indigo-500/30 rounded-xl flex items-center justify-between animate-in slide-in-from-bottom-2 fade-in duration-200">
+              <div className="flex items-center gap-2">
+                <Sparkles size={16} className="text-indigo-400" />
+                <span className="text-sm text-indigo-300 font-medium">Ready to extract tasks from your brain dump?</span>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={toggleMicrophone}
+                  className="text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
+                >
+                  <Mic size={12} /> Continue Speaking
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => handleSendMessage(e)}
+                  className="text-xs bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1 font-medium"
+                >
+                  <Send size={12} /> Extract Tasks
+                </button>
+              </div>
+            </div>
+          )}
           <p className="text-xs text-slate-600 mt-2 text-center">
-            💡 Tip: {isListening ? '🎤 Speaking... text appears in real-time' : 'Cmd/Ctrl + Enter to send • Click 🎤 for continuous voice input'}
+            💡 Tip: {isListening ? '🎤 Speaking... pauses auto-stop after 2 seconds' : 'Cmd/Ctrl + Enter to send • Click 🎤 for voice input'}
           </p>
         </div>
       </div>
