@@ -32,6 +32,9 @@ const ChatInterface = () => {
   const webSpeechRef = useRef<any>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  // Use refs to track the actual current values (not stale state)
+  const inputRef_value = useRef<string>('');
+  const liveTranscriptRef_value = useRef<string>('');
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -44,18 +47,25 @@ const ChatInterface = () => {
     inputRef.current?.focus();
   }, []);
 
+  // Keep refs in sync with state
+  useEffect(() => {
+    inputRef_value.current = input;
+  }, [input]);
+
+  useEffect(() => {
+    liveTranscriptRef_value.current = liveTranscript;
+  }, [liveTranscript]);
+
   const toggleMicrophone = async () => {
     const recorder = voiceRecorderRef.current;
 
     if (isListening) {
-      console.log('⏹️ STOPPING - Current state:', { input, liveTranscript });
-      
-      // Save current state immediately
-      const currentInput = input;
-      const currentLiveText = liveTranscript;
+      // Use refs to get the ACTUAL current values (not stale state)
+      const currentInput = inputRef_value.current;
+      const currentLiveText = liveTranscriptRef_value.current;
       const combinedText = currentInput + (currentInput && currentLiveText ? ' ' : '') + currentLiveText;
       
-      console.log('📝 Combined text before stop:', combinedText);
+      console.log('⏹️ STOPPING - Ref values:', { currentInput, currentLiveText, combinedText });
       
       // Stop Web Speech
       if (webSpeechRef.current) {
@@ -67,11 +77,11 @@ const ChatInterface = () => {
         clearTimeout(silenceTimerRef.current);
       }
 
-      // Immediately update input with combined text to prevent deletion
-      setInput(combinedText);
+      // Update state - React will batch these, but we've already captured the values in refs
       setIsListening(false);
       setIsTranscribing(true);
       setLiveTranscript('');
+      setInput(combinedText); // This will persist even if other states clear
 
       try {
         const audioBlob = await recorder.stopRecording();
@@ -94,8 +104,10 @@ const ChatInterface = () => {
         const { text } = await response.json();
         console.log('✅ Whisper returned:', text);
         
-        // Use Whisper's accurate transcript to replace the combined text
-        setInput(currentInput + (currentInput && text ? ' ' : '') + text);
+        // Combine original input with Whisper's accurate transcript
+        const finalText = currentInput + (currentInput && text ? ' ' : '') + text;
+        console.log('📝 Final combined text:', finalText);
+        setInput(finalText);
         setShowSendPrompt(true);
 
       } catch (error: any) {
