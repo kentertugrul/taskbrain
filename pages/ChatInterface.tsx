@@ -48,30 +48,40 @@ const ChatInterface = () => {
     const recorder = voiceRecorderRef.current;
 
     if (isListening) {
-      // Save the live transcript before clearing it
-      const currentLiveText = liveTranscript;
+      console.log('⏹️ STOPPING - Current state:', { input, liveTranscript });
       
-      // Stop both Web Speech and Whisper recording
+      // Save current state immediately
+      const currentInput = input;
+      const currentLiveText = liveTranscript;
+      const combinedText = currentInput + (currentInput && currentLiveText ? ' ' : '') + currentLiveText;
+      
+      console.log('📝 Combined text before stop:', combinedText);
+      
+      // Stop Web Speech
       if (webSpeechRef.current) {
         webSpeechRef.current.stop();
       }
       
-      setIsListening(false);
-      setIsTranscribing(true);
-
       // Clear silence timer
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
       }
 
+      // Immediately update input with combined text to prevent deletion
+      setInput(combinedText);
+      setIsListening(false);
+      setIsTranscribing(true);
+      setLiveTranscript('');
+
       try {
         const audioBlob = await recorder.stopRecording();
-        console.log('🎤 Stopped, transcribing with Whisper for accuracy...');
+        console.log('🎤 Got audio blob, size:', audioBlob.size, 'bytes');
 
         // Send to Whisper API for final accurate transcript
         const formData = new FormData();
         formData.append('file', audioBlob, 'audio.webm');
 
+        console.log('📡 Sending to Whisper API...');
         const response = await fetch('/api/transcribe', {
           method: 'POST',
           body: formData
@@ -82,26 +92,18 @@ const ChatInterface = () => {
         }
 
         const { text } = await response.json();
+        console.log('✅ Whisper returned:', text);
         
-        // Append Whisper's accurate transcript to existing input
-        setInput(prev => {
-          const combined = prev ? `${prev} ${text}` : text;
-          return combined;
-        });
-        
-        console.log('✅ Whisper transcript:', text);
-        setLiveTranscript(''); // Clear after Whisper success
+        // Use Whisper's accurate transcript to replace the combined text
+        setInput(currentInput + (currentInput && text ? ' ' : '') + text);
         setShowSendPrompt(true);
 
       } catch (error: any) {
-        console.error('❌ Transcription error:', error);
-        // Fall back to live transcript if Whisper fails
-        if (currentLiveText) {
-          setInput(prev => prev ? `${prev} ${currentLiveText}` : currentLiveText);
-        }
-        setLiveTranscript(''); // Clear after fallback save
-        alert(`Whisper failed. Using live transcript instead.\n\nFor best quality, add OPENAI_API_KEY to Vercel.`);
+        console.error('❌ Whisper error:', error);
+        // Input already has the combined text from earlier, so do nothing
+        // Just show the prompt
         setShowSendPrompt(true);
+        console.log('⚠️ Using live transcript (already in input)');
       } finally {
         setIsTranscribing(false);
       }
