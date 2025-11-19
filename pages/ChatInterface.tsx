@@ -11,7 +11,7 @@ const ChatInterface = () => {
     { 
       id: '1', 
       role: 'assistant', 
-      content: "👋 Hey! I'm your Task Brain. Just tell me what you need to do, and I'll organize it for you.\n\nTry something like:\n• \"I need to prepare the Q4 presentation by Friday\"\n• \"Buy groceries and pick up dry cleaning\"\n• \"Plan team offsite - venue, catering, invites\"", 
+      content: "👋 Hey! I'm your Task Brain. Just brain dump everything on your mind, and I'll organize it into actionable tasks.\n\n💬 **How to use:**\n• Tell me about ALL your tasks, meetings, and to-dos\n• The more context you give, the better I can organize\n• I'll extract multiple tasks and break them into subtasks\n• Use voice or type paragraphs!\n\n**Example:**\n\"Tomorrow I have a client meeting at 2pm to discuss the Q4 roadmap. I need to prepare slides and send them by EOD today. Also need to buy groceries - milk, eggs, bread. And I should call mom this weekend. Oh, and the team offsite planning - we need venue, catering, and send invites by next week.\"", 
       timestamp: new Date().toISOString() 
     }
   ]);
@@ -22,9 +22,10 @@ const ChatInterface = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [localApiKey, setLocalApiKey] = useState(apiKey || '');
   const [selectedModel, setSelectedModel] = useState<'gemini-2.0-flash-exp' | 'gemini-1.5-flash' | 'gemini-1.5-pro'>('gemini-2.0-flash-exp');
+  const [isExpanded, setIsExpanded] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -223,41 +224,64 @@ const ChatInterface = () => {
         </div>
 
         <div className="p-4 bg-slate-900 border-t border-slate-800">
-          <form onSubmit={handleSendMessage} className="relative flex items-center gap-2">
+          <div className="mb-2 text-xs text-slate-500 flex items-center justify-between">
+            <span>{input.length} characters</span>
             <button
               type="button"
-              onClick={() => setIsSettingsOpen(true)}
-              className="p-3 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all"
-              title="Settings"
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="text-indigo-400 hover:text-indigo-300 transition-colors"
             >
-              <Settings size={20} />
+              {isExpanded ? 'Collapse' : 'Expand for brain dump'}
             </button>
-            <button
-              type="button"
-              onClick={toggleMicrophone}
-              className={`p-3 rounded-xl transition-all ${isListening 
-                ? 'bg-red-500/20 text-red-400 animate-pulse' 
-                : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}
-              title={isListening ? "Stop Listening" : "Start Microphone"}
-            >
-              {isListening ? <MicOff size={20} /> : <Mic size={20} />}
-            </button>
-            <input
+          </div>
+          <form onSubmit={handleSendMessage} className="flex items-start gap-2">
+            <div className="flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => setIsSettingsOpen(true)}
+                className="p-3 rounded-xl text-slate-400 hover:text-slate-200 hover:bg-slate-800 transition-all"
+                title="Settings"
+              >
+                <Settings size={20} />
+              </button>
+              <button
+                type="button"
+                onClick={toggleMicrophone}
+                className={`p-3 rounded-xl transition-all ${isListening 
+                  ? 'bg-red-500/20 text-red-400 animate-pulse' 
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}
+                title={isListening ? "Stop Listening" : "Start Microphone"}
+              >
+                {isListening ? <MicOff size={20} /> : <Mic size={20} />}
+              </button>
+            </div>
+            <textarea
               ref={inputRef}
-              type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Tell me what you need to do..."
-              className="flex-1 bg-slate-950 text-white border border-slate-700 rounded-xl py-3 px-4 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/50 transition-all placeholder:text-slate-600"
+              placeholder="Brain dump everything... Tell me about all your tasks, meetings, ideas, to-dos. I'll organize them for you! 🧠"
+              rows={isExpanded ? 8 : 2}
+              className="flex-1 bg-slate-950 text-white border border-slate-700 rounded-xl py-3 px-4 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/50 transition-all placeholder:text-slate-600 resize-none"
+              onKeyDown={(e) => {
+                // Submit on Cmd/Ctrl + Enter
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+                  e.preventDefault();
+                  handleSendMessage(e);
+                }
+              }}
             />
             <button
               type="submit"
               disabled={isLoading || !input.trim()}
-              className="p-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-all shadow-lg shadow-indigo-900/30 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="p-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl transition-all shadow-lg shadow-indigo-900/30 disabled:opacity-50 disabled:cursor-not-allowed self-end"
+              title="Send (or Cmd/Ctrl + Enter)"
             >
               <Send size={20} />
             </button>
           </form>
+          <p className="text-xs text-slate-600 mt-2 text-center">
+            💡 Tip: Cmd/Ctrl + Enter to send • Expand for longer brain dumps
+          </p>
         </div>
       </div>
 
