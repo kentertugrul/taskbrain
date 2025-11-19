@@ -49,6 +49,11 @@ const ChatInterface = () => {
       return; // onend handler will save the text
     }
 
+    // Starting fresh or continuing - preserve existing input
+    if (!finalTranscript && input) {
+      setFinalTranscript(input);
+    }
+
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
       alert("Your browser does not support Speech Recognition.");
@@ -62,9 +67,13 @@ const ChatInterface = () => {
 
     recognition.onstart = () => {
       setIsListening(true);
-      setFinalTranscript(input); // Start with existing text
+      // Only set finalTranscript from input if it's empty (first time)
+      // Otherwise keep what we had (for continue speaking)
+      if (!finalTranscript) {
+        setFinalTranscript(input);
+      }
       setInterimTranscript('');
-      console.log('🎤 Listening started...');
+      console.log('🎤 Listening started with existing:', finalTranscript || input);
     };
 
     recognition.onresult = (event: any) => {
@@ -128,14 +137,15 @@ const ChatInterface = () => {
         clearTimeout(silenceTimerRef.current);
       }
       
-      // Save everything to input
+      // Save everything to input (keep the transcript!)
       const combined = (finalTranscript + interimTranscript).trim();
       if (combined) {
         setInput(combined);
         console.log('💾 Saved transcript:', combined.length, 'characters');
       }
-      setFinalTranscript('');
-      setInterimTranscript('');
+      // DON'T clear finalTranscript and interimTranscript yet
+      // They'll be used if user clicks "Continue Speaking"
+      // Only clear them when user sends the message
     };
 
     recognitionRef.current = recognition;
@@ -146,8 +156,10 @@ const ChatInterface = () => {
     e?.preventDefault();
     if (!input.trim()) return;
     
-    // Hide send prompt after sending
+    // Hide send prompt and clear transcripts after sending
     setShowSendPrompt(false);
+    setFinalTranscript('');
+    setInterimTranscript('');
     
     if (!apiKey) {
       setMessages(prev => [...prev, {
