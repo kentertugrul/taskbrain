@@ -23,6 +23,8 @@ const ChatInterface = () => {
   const [localApiKey, setLocalApiKey] = useState(apiKey || '');
   const [selectedModel, setSelectedModel] = useState<'gemini-2.0-flash-exp' | 'gemini-1.5-flash' | 'gemini-1.5-pro'>('gemini-2.0-flash-exp');
   const [isExpanded, setIsExpanded] = useState(false);
+  const [interimTranscript, setInterimTranscript] = useState('');
+  const [finalTranscript, setFinalTranscript] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -58,35 +60,32 @@ const ChatInterface = () => {
 
     recognition.onstart = () => {
       setIsListening(true);
+      setFinalTranscript(input); // Save existing text
+      setInterimTranscript('');
       console.log('🎤 Listening started...');
     };
 
     recognition.onresult = (event: any) => {
-      let interimTranscript = '';
-      let finalTranscript = '';
+      let interim = '';
+      let final = '';
 
       // Loop through all results
-      for (let i = event.resultIndex; i < event.results.length; i++) {
+      for (let i = 0; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
         
         if (event.results[i].isFinal) {
-          finalTranscript += transcript + ' ';
+          final += transcript + ' ';
         } else {
-          interimTranscript += transcript;
+          interim += transcript;
         }
       }
 
-      // Update input with final results (append to existing)
-      if (finalTranscript) {
-        setInput(prev => {
-          const newText = prev + (prev ? ' ' : '') + finalTranscript.trim();
-          return newText;
-        });
-      }
-
-      // Show interim results in real-time (optional feedback)
-      if (interimTranscript) {
-        console.log('🎤 Interim:', interimTranscript);
+      // Update state with both interim (streaming) and final text
+      if (final) {
+        setFinalTranscript(prev => prev + final);
+        setInterimTranscript('');
+      } else {
+        setInterimTranscript(interim);
       }
     };
 
@@ -97,6 +96,10 @@ const ChatInterface = () => {
 
     recognition.onend = () => {
       setIsListening(false);
+      // Combine final transcript with input
+      setInput(finalTranscript + interimTranscript);
+      setFinalTranscript('');
+      setInterimTranscript('');
       console.log('🎤 Listening stopped');
     };
 
@@ -286,8 +289,12 @@ const ChatInterface = () => {
             </div>
             <textarea
               ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
+              value={isListening ? (finalTranscript + interimTranscript) : input}
+              onChange={(e) => {
+                if (!isListening) {
+                  setInput(e.target.value);
+                }
+              }}
               placeholder="Brain dump everything... Tell me about all your tasks, meetings, ideas, to-dos. I'll organize them for you! 🧠"
               rows={isExpanded ? 8 : 2}
               className="flex-1 bg-slate-950 text-white border border-slate-700 rounded-xl py-3 px-4 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/50 transition-all placeholder:text-slate-600 resize-none"
