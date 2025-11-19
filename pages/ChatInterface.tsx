@@ -50,43 +50,21 @@ const ChatInterface = () => {
 
   // Keep refs in sync with state
   useEffect(() => {
-    console.log('📝 input state changed to:', input);
     inputRef_value.current = input;
   }, [input]);
 
   useEffect(() => {
-    console.log('📝 liveTranscript state changed to:', liveTranscript);
     liveTranscriptRef_value.current = liveTranscript;
   }, [liveTranscript]);
 
-  // Force textarea to show the correct value
-  useEffect(() => {
-    if (inputRef.current && !isListening && !isTranscribing) {
-      if (inputRef.current.value !== input) {
-        console.log('🔧 Forcing textarea value to match state:', input);
-        inputRef.current.value = input;
-      }
-    }
-  }, [input, isListening, isTranscribing]);
-
   const toggleMicrophone = async () => {
     const recorder = voiceRecorderRef.current;
-
-    console.log('🔵 toggleMicrophone called, isListening:', isListening, 'isListeningRef:', isListeningRef.current);
 
     if (isListeningRef.current) {
       // Use refs to get the ACTUAL current values (not stale state)
       const currentInput = inputRef_value.current;
       const currentLiveText = liveTranscriptRef_value.current;
       const combinedText = currentInput + (currentInput && currentLiveText ? ' ' : '') + currentLiveText;
-      
-      console.log('⏹️ STOPPING - Ref values:', { 
-        currentInput, 
-        currentLiveText, 
-        combinedText,
-        inputState: input,
-        liveTranscriptState: liveTranscript 
-      });
       
       // Stop Web Speech
       if (webSpeechRef.current) {
@@ -98,8 +76,6 @@ const ChatInterface = () => {
         clearTimeout(silenceTimerRef.current);
       }
 
-      console.log('🔵 About to update state with combinedText:', combinedText);
-      
       // CRITICAL: Update state in the right order
       // First set the input to preserve the text, THEN change other states
       setInput(combinedText);
@@ -109,18 +85,14 @@ const ChatInterface = () => {
       setIsListening(false);
       isListeningRef.current = false;
       setIsTranscribing(true);
-      
-      console.log('🔵 State updated. Input should now be:', combinedText);
 
       try {
         const audioBlob = await recorder.stopRecording();
-        console.log('🎤 Got audio blob, size:', audioBlob.size, 'bytes');
 
         // Send to Whisper API for final accurate transcript
         const formData = new FormData();
         formData.append('file', audioBlob, 'audio.webm');
 
-        console.log('📡 Sending to Whisper API...');
         const response = await fetch('/api/transcribe', {
           method: 'POST',
           body: formData
@@ -131,12 +103,11 @@ const ChatInterface = () => {
         }
 
         const { text } = await response.json();
-        console.log('✅ Whisper returned:', text);
         
         // Combine original input with Whisper's accurate transcript
         const finalText = currentInput + (currentInput && text ? ' ' : '') + text;
-        console.log('📝 Final combined text:', finalText);
         setInput(finalText);
+        inputRef_value.current = finalText;
         setShowSendPrompt(true);
 
       } catch (error: any) {
@@ -144,7 +115,6 @@ const ChatInterface = () => {
         // Input already has the combined text from earlier, so do nothing
         // Just show the prompt
         setShowSendPrompt(true);
-        console.log('⚠️ Using live transcript (already in input)');
       } finally {
         setIsTranscribing(false);
       }
@@ -183,7 +153,6 @@ const ChatInterface = () => {
 
           // Auto-stop after 3 seconds of silence
           silenceTimerRef.current = setTimeout(() => {
-            console.log('🤫 Pause detected, stopping...');
             toggleMicrophone();
           }, 3000);
         };
