@@ -85,13 +85,16 @@ const ChatInterface = () => {
 
       console.log('🔵 About to update state with combinedText:', combinedText);
       
-      // Update state - React will batch these, but we've already captured the values in refs
+      // CRITICAL: Update state in the right order
+      // First set the input to preserve the text, THEN change other states
+      setInput(combinedText);
+      inputRef_value.current = combinedText;
+      setLiveTranscript('');
+      liveTranscriptRef_value.current = '';
       setIsListening(false);
       setIsTranscribing(true);
-      setLiveTranscript('');
-      setInput(combinedText); // This will persist even if other states clear
       
-      console.log('🔵 State update called, combinedText was:', combinedText);
+      console.log('🔵 State updated. Input should now be:', combinedText);
 
       try {
         const audioBlob = await recorder.stopRecording();
@@ -156,7 +159,11 @@ const ChatInterface = () => {
             currentText += event.results[i][0].transcript;
           }
           
+          console.log('🎤 Web Speech result:', currentText);
+          
+          // Update both state AND ref immediately
           setLiveTranscript(currentText);
+          liveTranscriptRef_value.current = currentText;
 
           // Auto-stop after 3 seconds of silence
           silenceTimerRef.current = setTimeout(() => {
@@ -390,7 +397,9 @@ const ChatInterface = () => {
               }
               onChange={(e) => {
                 if (!isListening && !isTranscribing) {
-                  setInput(e.target.value);
+                  const newValue = e.target.value;
+                  setInput(newValue);
+                  inputRef_value.current = newValue;
                 }
               }}
               placeholder="Brain dump everything... Tell me about all your tasks, meetings, ideas, to-dos. I'll organize them for you! 🧠"
