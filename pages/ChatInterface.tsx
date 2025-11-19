@@ -90,6 +90,7 @@ const ChatInterface = () => {
         });
         
         console.log('✅ Whisper transcript:', text);
+        setLiveTranscript(''); // Clear after Whisper success
         setShowSendPrompt(true);
 
       } catch (error: any) {
@@ -98,11 +99,11 @@ const ChatInterface = () => {
         if (currentLiveText) {
           setInput(prev => prev ? `${prev} ${currentLiveText}` : currentLiveText);
         }
+        setLiveTranscript(''); // Clear after fallback save
         alert(`Whisper failed. Using live transcript instead.\n\nFor best quality, add OPENAI_API_KEY to Vercel.`);
         setShowSendPrompt(true);
       } finally {
         setIsTranscribing(false);
-        setLiveTranscript(''); // Clear only after we've saved
       }
       return;
     }
@@ -359,9 +360,13 @@ const ChatInterface = () => {
             </div>
             <textarea
               ref={inputRef}
-              value={isListening ? (input + (input && liveTranscript ? ' ' : '') + liveTranscript) : input}
+              value={
+                isListening ? (input + (input && liveTranscript ? ' ' : '') + liveTranscript) :
+                isTranscribing ? (input + (liveTranscript ? ` ${liveTranscript}` : '')) :
+                input
+              }
               onChange={(e) => {
-                if (!isListening) {
+                if (!isListening && !isTranscribing) {
                   setInput(e.target.value);
                 }
               }}
