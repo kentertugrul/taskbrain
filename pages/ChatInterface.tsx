@@ -65,7 +65,13 @@ const ChatInterface = () => {
       const currentLiveText = liveTranscriptRef_value.current;
       const combinedText = currentInput + (currentInput && currentLiveText ? ' ' : '') + currentLiveText;
       
-      console.log('⏹️ STOPPING - Ref values:', { currentInput, currentLiveText, combinedText });
+      console.log('⏹️ STOPPING - Ref values:', { 
+        currentInput, 
+        currentLiveText, 
+        combinedText,
+        inputState: input,
+        liveTranscriptState: liveTranscript 
+      });
       
       // Stop Web Speech
       if (webSpeechRef.current) {
@@ -77,11 +83,15 @@ const ChatInterface = () => {
         clearTimeout(silenceTimerRef.current);
       }
 
+      console.log('🔵 About to update state with combinedText:', combinedText);
+      
       // Update state - React will batch these, but we've already captured the values in refs
       setIsListening(false);
       setIsTranscribing(true);
       setLiveTranscript('');
       setInput(combinedText); // This will persist even if other states clear
+      
+      console.log('🔵 State update called, combinedText was:', combinedText);
 
       try {
         const audioBlob = await recorder.stopRecording();
@@ -376,7 +386,6 @@ const ChatInterface = () => {
               ref={inputRef}
               value={
                 isListening ? (input + (input && liveTranscript ? ' ' : '') + liveTranscript) :
-                isTranscribing ? (input + (liveTranscript ? ` ${liveTranscript}` : '')) :
                 input
               }
               onChange={(e) => {
