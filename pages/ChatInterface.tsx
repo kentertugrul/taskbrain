@@ -49,12 +49,24 @@ const ChatInterface = () => {
 
   // Keep refs in sync with state
   useEffect(() => {
+    console.log('📝 input state changed to:', input);
     inputRef_value.current = input;
   }, [input]);
 
   useEffect(() => {
+    console.log('📝 liveTranscript state changed to:', liveTranscript);
     liveTranscriptRef_value.current = liveTranscript;
   }, [liveTranscript]);
+
+  // Force textarea to show the correct value
+  useEffect(() => {
+    if (inputRef.current && !isListening && !isTranscribing) {
+      if (inputRef.current.value !== input) {
+        console.log('🔧 Forcing textarea value to match state:', input);
+        inputRef.current.value = input;
+      }
+    }
+  }, [input, isListening, isTranscribing]);
 
   const toggleMicrophone = async () => {
     const recorder = voiceRecorderRef.current;
