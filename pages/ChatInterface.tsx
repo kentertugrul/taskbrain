@@ -35,6 +35,7 @@ const ChatInterface = () => {
   // Use refs to track the actual current values (not stale state)
   const inputRef_value = useRef<string>('');
   const liveTranscriptRef_value = useRef<string>('');
+  const isListeningRef = useRef<boolean>(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -71,7 +72,9 @@ const ChatInterface = () => {
   const toggleMicrophone = async () => {
     const recorder = voiceRecorderRef.current;
 
-    if (isListening) {
+    console.log('🔵 toggleMicrophone called, isListening:', isListening, 'isListeningRef:', isListeningRef.current);
+
+    if (isListeningRef.current) {
       // Use refs to get the ACTUAL current values (not stale state)
       const currentInput = inputRef_value.current;
       const currentLiveText = liveTranscriptRef_value.current;
@@ -104,6 +107,7 @@ const ChatInterface = () => {
       setLiveTranscript('');
       liveTranscriptRef_value.current = '';
       setIsListening(false);
+      isListeningRef.current = false;
       setIsTranscribing(true);
       
       console.log('🔵 State updated. Input should now be:', combinedText);
@@ -193,6 +197,7 @@ const ChatInterface = () => {
       }
       
       setIsListening(true);
+      isListeningRef.current = true;
       setLiveTranscript('');
       console.log('🎤 Recording started (Whisper + live preview)...');
       
