@@ -1,9 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useAppContext } from '../App';
-import { Send, Mic, Bot, MicOff, Sparkles, CheckCircle2, Clock, Briefcase, Home, ChevronRight, Settings, X } from 'lucide-react';
+import { Send, Mic, Bot, MicOff, Sparkles, CheckCircle2, Clock, Briefcase, Home, ChevronRight, Settings, X, Circle } from 'lucide-react';
 import { parseUserMessage } from '../services/aiService';
 import { Task, TaskDecision, TaskStatus, Message, AiInterpretation } from '../types';
 import { format } from 'date-fns';
+import { VoiceRecorder } from '../services/whisperService';
 
 const ChatInterface = () => {
   const { tasks, addTask, apiKey } = useAppContext();
@@ -24,11 +25,10 @@ const ChatInterface = () => {
   const [selectedModel, setSelectedModel] = useState<'gemini-2.0-flash-exp' | 'gemini-1.5-flash' | 'gemini-1.5-pro'>('gemini-2.0-flash-exp');
   const [isExpanded, setIsExpanded] = useState(false);
   const [showSendPrompt, setShowSendPrompt] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const recognitionRef = useRef<any>(null);
+  const voiceRecorderRef = useRef<VoiceRecorder>(new VoiceRecorder());
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const accumulatedTextRef = useRef<string>(''); // Track accumulated voice text
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -41,113 +41,70 @@ const ChatInterface = () => {
     inputRef.current?.focus();
   }, []);
 
-  const toggleMicrophone = () => {
+  const toggleMicrophone = async () => {
+    const recorder = voiceRecorderRef.current;
+
     if (isListening) {
-      // Stop listening
-      recognitionRef.current?.stop();
+      // Stop recording and transcribe
+      setIsListening(false);
+      setIsTranscribing(true);
+
+      try {
+        const audioBlob = await recorder.stopRecording();
+        console.log('🎤 Stopped recording, transcribing...');
+
+        // Send to our Vercel API endpoint
+        const formData = new FormData();
+        formData.append('file', audioBlob, 'audio.webm');
+
+        const response = await fetch('/api/transcribe', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!response.ok) {
+          throw new Error('Transcription failed');
+        }
+
+        const { text } = await response.json();
+        
+        // Append transcribed text to existing input
+        setInput(prev => {
+          const combined = prev ? `${prev} ${text}` : text;
+          return combined;
+        });
+        
+        console.log('✅ Transcribed:', text);
+        setShowSendPrompt(true);
+
+      } catch (error: any) {
+        console.error('❌ Transcription error:', error);
+        alert(`Transcription failed: ${error.message}\n\nMake sure you've added OPENAI_API_KEY to Vercel environment variables.`);
+      } finally {
+        setIsTranscribing(false);
+      }
       return;
     }
 
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert("Your browser does not support Speech Recognition.");
-      return;
-    }
-
-    // When starting, save current input to accumulated text
-    if (input && !accumulatedTextRef.current) {
-      accumulatedTextRef.current = input;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-    recognition.maxAlternatives = 1;
-
-    let currentSessionText = '';
-
-    recognition.onstart = () => {
+    // Start recording
+    try {
+      await recorder.startRecording();
       setIsListening(true);
-      currentSessionText = '';
-      console.log('🎤 Started. Accumulated so far:', accumulatedTextRef.current);
-    };
-
-    recognition.onresult = (event: any) => {
-      // Clear silence timer
-      if (silenceTimerRef.current) {
-        clearTimeout(silenceTimerRef.current);
-      }
-
-      let interimText = '';
-      let finalText = '';
-
-      // Build full transcript from this session
-      for (let i = 0; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalText += transcript + ' ';
-        } else {
-          interimText = transcript; // Only keep last interim
-        }
-      }
-
-      currentSessionText = finalText;
-      
-      // Show accumulated + current session + interim
-      const displayText = accumulatedTextRef.current + 
-                         (accumulatedTextRef.current && currentSessionText ? ' ' : '') + 
-                         currentSessionText + interimText;
-      
-      setInput(displayText);
-
-      // Auto-stop after 2 seconds of silence
-      silenceTimerRef.current = setTimeout(() => {
-        if (recognitionRef.current) {
-          console.log('🤫 Pause detected, stopping...');
-          recognitionRef.current.stop();
-        }
-      }, 2000);
-    };
-
-    recognition.onerror = (event: any) => {
-      console.error("Speech error:", event.error);
-      setIsListening(false);
-    };
-
-    recognition.onend = () => {
-      console.log('🎤 Stopped');
-      setIsListening(false);
-      
-      if (silenceTimerRef.current) {
-        clearTimeout(silenceTimerRef.current);
-      }
-      
-      // Save this session's text to accumulated
-      if (currentSessionText) {
-        accumulatedTextRef.current = accumulatedTextRef.current + 
-                                    (accumulatedTextRef.current ? ' ' : '') + 
-                                    currentSessionText;
-        setInput(accumulatedTextRef.current);
-        console.log('✅ Saved. Total:', accumulatedTextRef.current.length, 'chars');
-      }
-      
-      setShowSendPrompt(true);
-    };
-
-    recognitionRef.current = recognition;
-    recognition.start();
+      console.log('🎤 Recording started...');
+    } catch (error: any) {
+      console.error('Failed to start recording:', error);
+      alert('Failed to access microphone. Please grant permission.');
+    }
   };
 
   const handleSendMessage = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!input.trim()) return;
     
-    // Hide send prompt and clear accumulated text after sending
+    // Hide send prompt after sending
     setShowSendPrompt(false);
-    accumulatedTextRef.current = '';
     
-    if (!apiKey) {
+    if (!apiKey && !localApiKey) {
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         role: 'system',
@@ -313,12 +270,27 @@ const ChatInterface = () => {
               <button
                 type="button"
                 onClick={toggleMicrophone}
-                className={`p-3 rounded-xl transition-all relative ${isListening 
-                  ? 'bg-red-500/20 text-red-400 animate-pulse' 
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}
-                title={isListening ? "Stop Listening (Click or just stop talking)" : "Start Microphone - Speak continuously"}
+                disabled={isTranscribing}
+                className={`p-3 rounded-xl transition-all relative ${
+                  isTranscribing 
+                    ? 'bg-amber-500/20 text-amber-400' 
+                    : isListening 
+                    ? 'bg-red-500/20 text-red-400 animate-pulse' 
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                title={
+                  isTranscribing ? 'Transcribing with Whisper...' :
+                  isListening ? 'Stop Recording' : 
+                  'Start Recording (Whisper AI)'
+                }
               >
-                {isListening ? <MicOff size={20} /> : <Mic size={20} />}
+                {isTranscribing ? (
+                  <Circle size={20} className="animate-spin" />
+                ) : isListening ? (
+                  <MicOff size={20} />
+                ) : (
+                  <Mic size={20} />
+                )}
                 {isListening && (
                   <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-ping" />
                 )}
@@ -327,12 +299,7 @@ const ChatInterface = () => {
             <textarea
               ref={inputRef}
               value={input}
-              onChange={(e) => {
-                if (!isListening) {
-                  setInput(e.target.value);
-                  accumulatedTextRef.current = e.target.value;
-                }
-              }}
+              onChange={(e) => setInput(e.target.value)}
               placeholder="Brain dump everything... Tell me about all your tasks, meetings, ideas, to-dos. I'll organize them for you! 🧠"
               rows={isExpanded ? 8 : 2}
               className="flex-1 bg-slate-950 text-white border border-slate-700 rounded-xl py-3 px-4 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/50 transition-all placeholder:text-slate-600 resize-none"
@@ -378,7 +345,9 @@ const ChatInterface = () => {
             </div>
           )}
           <p className="text-xs text-slate-600 mt-2 text-center">
-            💡 Tip: {isListening ? '🎤 Speaking... pauses auto-stop after 2 seconds' : 'Cmd/Ctrl + Enter to send • Click 🎤 for voice input'}
+            💡 {isTranscribing ? '⏳ Transcribing with OpenAI Whisper...' : 
+                isListening ? '🎤 Recording... Click mic to stop & transcribe' : 
+                'Cmd/Ctrl + Enter to send • 🎤 = Whisper AI (perfect quality!)'}
           </p>
         </div>
       </div>
