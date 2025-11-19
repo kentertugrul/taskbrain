@@ -48,6 +48,9 @@ const ChatInterface = () => {
     const recorder = voiceRecorderRef.current;
 
     if (isListening) {
+      // Save the live transcript before clearing it
+      const currentLiveText = liveTranscript;
+      
       // Stop both Web Speech and Whisper recording
       if (webSpeechRef.current) {
         webSpeechRef.current.stop();
@@ -55,7 +58,6 @@ const ChatInterface = () => {
       
       setIsListening(false);
       setIsTranscribing(true);
-      setLiveTranscript('');
 
       // Clear silence timer
       if (silenceTimerRef.current) {
@@ -81,7 +83,7 @@ const ChatInterface = () => {
 
         const { text } = await response.json();
         
-        // Replace with Whisper's accurate transcript
+        // Append Whisper's accurate transcript to existing input
         setInput(prev => {
           const combined = prev ? `${prev} ${text}` : text;
           return combined;
@@ -93,13 +95,14 @@ const ChatInterface = () => {
       } catch (error: any) {
         console.error('❌ Transcription error:', error);
         // Fall back to live transcript if Whisper fails
-        if (liveTranscript) {
-          setInput(prev => prev ? `${prev} ${liveTranscript}` : liveTranscript);
+        if (currentLiveText) {
+          setInput(prev => prev ? `${prev} ${currentLiveText}` : currentLiveText);
         }
         alert(`Whisper failed. Using live transcript instead.\n\nFor best quality, add OPENAI_API_KEY to Vercel.`);
         setShowSendPrompt(true);
       } finally {
         setIsTranscribing(false);
+        setLiveTranscript(''); // Clear only after we've saved
       }
       return;
     }
