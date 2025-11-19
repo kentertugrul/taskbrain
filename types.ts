@@ -1,0 +1,68 @@
+export enum TaskStatus {
+  BACKLOG = 'BACKLOG',
+  SCHEDULED = 'SCHEDULED',
+  IN_PROGRESS = 'IN_PROGRESS',
+  DONE = 'DONE',
+  CANCELLED = 'CANCELLED'
+}
+
+export enum TaskDecision {
+  DO = 'DO',
+  DELAY = 'DELAY',
+  DELEGATE = 'DELEGATE',
+  DROP = 'DROP'
+}
+
+export interface SubTask {
+  id: string;
+  title: string;
+  status: TaskStatus;
+}
+
+export interface Task {
+  id: string;
+  title: string;
+  description?: string;
+  status: TaskStatus;
+  decision: TaskDecision;
+  priorityScore: number; // 0-1
+  dueAt?: string; // ISO
+  createdAt: string;
+  estimatedMinutes?: number;
+  sourceChannel: 'WHATSAPP' | 'WEB';
+  subtasks: SubTask[];
+}
+
+export interface AiSubTaskDTO {
+  title: string;
+}
+
+export interface AiTaskDTO {
+  title: string;
+  description?: string;
+  estimatedMinutes?: number;
+  dueAt?: string;
+  decision?: TaskDecision;
+  subtasks?: AiSubTaskDTO[];
+}
+
+export interface AiMeta {
+  time_spent_minutes?: number;
+  natural_language_summary?: string;
+  thought_process?: string;
+}
+
+export interface AiInterpretation {
+  intent: 'CREATE_TASKS' | 'UPDATE_TASK' | 'MARK_TASK_DONE' | 'ASK_WHAT_NEXT' | 'LIST_TASKS_SUMMARY' | 'LOG_TIME_SPENT' | 'SMALL_TALK';
+  tasks?: AiTaskDTO[];
+  meta?: AiMeta;
+}
+
+export interface Message {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp: string;
+  isAudio?: boolean;
+  processingData?: any;
+}
