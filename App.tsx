@@ -55,7 +55,7 @@ const SidebarItem = ({ to, icon: Icon, label }: { to: string, icon: any, label: 
   );
 };
 
-const Layout: React.FC<{ children: React.ReactNode; isLoading: boolean }> = ({ children, isLoading }) => {
+const Layout: React.FC<{ children: React.ReactNode; isLoading: boolean; useSupabase: boolean }> = ({ children, isLoading, useSupabase }) => {
   return (
     <div className="min-h-screen bg-slate-950 flex font-sans text-slate-200 selection:bg-indigo-500/30">
       <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col fixed h-full z-20">
@@ -222,7 +222,7 @@ const App = () => {
       deleteTask 
     }}>
       <HashRouter>
-        <Layout isLoading={isLoading}>
+        <Layout isLoading={isLoading} useSupabase={useSupabase}>
           <Routes>
             <Route path="/" element={<ChatInterface />} />
             <Route path="/dashboard" element={<Dashboard />} />
