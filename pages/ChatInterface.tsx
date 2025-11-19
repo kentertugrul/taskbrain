@@ -42,9 +42,9 @@ const ChatInterface = () => {
 
   const toggleMicrophone = () => {
     if (isListening) {
+      // Stop listening and save the text
       recognitionRef.current?.stop();
-      setIsListening(false);
-      return;
+      return; // onend handler will save the text
     }
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -60,7 +60,7 @@ const ChatInterface = () => {
 
     recognition.onstart = () => {
       setIsListening(true);
-      setFinalTranscript(input); // Save existing text
+      setFinalTranscript(input); // Start with existing text
       setInterimTranscript('');
       console.log('🎤 Listening started...');
     };
@@ -91,16 +91,29 @@ const ChatInterface = () => {
 
     recognition.onerror = (event: any) => {
       console.error("Speech recognition error", event.error);
-      setIsListening(false);
+      if (event.error !== 'aborted') {
+        setIsListening(false);
+        // Save what we have so far
+        const combined = (finalTranscript + interimTranscript).trim();
+        if (combined) {
+          setInput(combined);
+        }
+        setFinalTranscript('');
+        setInterimTranscript('');
+      }
     };
 
     recognition.onend = () => {
+      console.log('🎤 Listening stopped');
       setIsListening(false);
-      // Combine final transcript with input
-      setInput(finalTranscript + interimTranscript);
+      // Save everything to input
+      const combined = (finalTranscript + interimTranscript).trim();
+      if (combined) {
+        setInput(combined);
+        console.log('💾 Saved transcript:', combined.length, 'characters');
+      }
       setFinalTranscript('');
       setInterimTranscript('');
-      console.log('🎤 Listening stopped');
     };
 
     recognitionRef.current = recognition;
