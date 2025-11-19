@@ -26,9 +26,12 @@ const ChatInterface = () => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showSendPrompt, setShowSendPrompt] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [liveTranscript, setLiveTranscript] = useState(''); // Real-time preview from Web Speech
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const voiceRecorderRef = useRef<VoiceRecorder>(new VoiceRecorder());
+  const webSpeechRef = useRef<any>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -45,15 +48,25 @@ const ChatInterface = () => {
     const recorder = voiceRecorderRef.current;
 
     if (isListening) {
-      // Stop recording and transcribe
+      // Stop both Web Speech and Whisper recording
+      if (webSpeechRef.current) {
+        webSpeechRef.current.stop();
+      }
+      
       setIsListening(false);
       setIsTranscribing(true);
+      setLiveTranscript('');
+
+      // Clear silence timer
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+      }
 
       try {
         const audioBlob = await recorder.stopRecording();
-        console.log('🎤 Stopped recording, transcribing...');
+        console.log('🎤 Stopped, transcribing with Whisper for accuracy...');
 
-        // Send to our Vercel API endpoint
+        // Send to Whisper API for final accurate transcript
         const formData = new FormData();
         formData.append('file', audioBlob, 'audio.webm');
 
@@ -63,34 +76,79 @@ const ChatInterface = () => {
         });
 
         if (!response.ok) {
-          throw new Error('Transcription failed');
+          throw new Error('Whisper transcription failed');
         }
 
         const { text } = await response.json();
         
-        // Append transcribed text to existing input
+        // Replace with Whisper's accurate transcript
         setInput(prev => {
           const combined = prev ? `${prev} ${text}` : text;
           return combined;
         });
         
-        console.log('✅ Transcribed:', text);
+        console.log('✅ Whisper transcript:', text);
         setShowSendPrompt(true);
 
       } catch (error: any) {
         console.error('❌ Transcription error:', error);
-        alert(`Transcription failed: ${error.message}\n\nMake sure you've added OPENAI_API_KEY to Vercel environment variables.`);
+        // Fall back to live transcript if Whisper fails
+        if (liveTranscript) {
+          setInput(prev => prev ? `${prev} ${liveTranscript}` : liveTranscript);
+        }
+        alert(`Whisper failed. Using live transcript instead.\n\nFor best quality, add OPENAI_API_KEY to Vercel.`);
+        setShowSendPrompt(true);
       } finally {
         setIsTranscribing(false);
       }
       return;
     }
 
-    // Start recording
+    // Start recording with BOTH Whisper (for quality) and Web Speech (for preview)
     try {
+      // Start Whisper recorder
       await recorder.startRecording();
+      
+      // Start Web Speech for live preview
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+
+        recognition.onresult = (event: any) => {
+          // Clear silence timer
+          if (silenceTimerRef.current) {
+            clearTimeout(silenceTimerRef.current);
+          }
+
+          let currentText = '';
+          for (let i = 0; i < event.results.length; i++) {
+            currentText += event.results[i][0].transcript;
+          }
+          
+          setLiveTranscript(currentText);
+
+          // Auto-stop after 3 seconds of silence
+          silenceTimerRef.current = setTimeout(() => {
+            console.log('🤫 Pause detected, stopping...');
+            toggleMicrophone();
+          }, 3000);
+        };
+
+        recognition.onerror = (event: any) => {
+          console.log('Web Speech error (non-critical):', event.error);
+        };
+
+        recognition.start();
+        webSpeechRef.current = recognition;
+      }
+      
       setIsListening(true);
-      console.log('🎤 Recording started...');
+      setLiveTranscript('');
+      console.log('🎤 Recording started (Whisper + live preview)...');
+      
     } catch (error: any) {
       console.error('Failed to start recording:', error);
       alert('Failed to access microphone. Please grant permission.');
@@ -298,8 +356,12 @@ const ChatInterface = () => {
             </div>
             <textarea
               ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
+              value={isListening ? (input + (input && liveTranscript ? ' ' : '') + liveTranscript) : input}
+              onChange={(e) => {
+                if (!isListening) {
+                  setInput(e.target.value);
+                }
+              }}
               placeholder="Brain dump everything... Tell me about all your tasks, meetings, ideas, to-dos. I'll organize them for you! 🧠"
               rows={isExpanded ? 8 : 2}
               className="flex-1 bg-slate-950 text-white border border-slate-700 rounded-xl py-3 px-4 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/50 transition-all placeholder:text-slate-600 resize-none"
@@ -345,9 +407,9 @@ const ChatInterface = () => {
             </div>
           )}
           <p className="text-xs text-slate-600 mt-2 text-center">
-            💡 {isTranscribing ? '⏳ Transcribing with OpenAI Whisper...' : 
-                isListening ? '🎤 Recording... Click mic to stop & transcribe' : 
-                'Cmd/Ctrl + Enter to send • 🎤 = Whisper AI (perfect quality!)'}
+            💡 {isTranscribing ? '⏳ Getting perfect transcript from Whisper AI...' : 
+                isListening ? '🎤 Speaking... auto-stops after 3sec pause (or click mic)' : 
+                'Cmd/Ctrl + Enter to send • 🎤 = Live preview + Whisper accuracy!'}
           </p>
         </div>
       </div>
