@@ -52,17 +52,42 @@ const ChatInterface = () => {
     }
 
     const recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = false;
+    recognition.continuous = true; // Keep listening
+    recognition.interimResults = true; // Show partial results in real-time
     recognition.lang = 'en-US';
 
     recognition.onstart = () => {
       setIsListening(true);
+      console.log('🎤 Listening started...');
     };
 
     recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      setInput(prev => prev + (prev ? ' ' : '') + transcript);
+      let interimTranscript = '';
+      let finalTranscript = '';
+
+      // Loop through all results
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript + ' ';
+        } else {
+          interimTranscript += transcript;
+        }
+      }
+
+      // Update input with final results (append to existing)
+      if (finalTranscript) {
+        setInput(prev => {
+          const newText = prev + (prev ? ' ' : '') + finalTranscript.trim();
+          return newText;
+        });
+      }
+
+      // Show interim results in real-time (optional feedback)
+      if (interimTranscript) {
+        console.log('🎤 Interim:', interimTranscript);
+      }
     };
 
     recognition.onerror = (event: any) => {
@@ -72,6 +97,7 @@ const ChatInterface = () => {
 
     recognition.onend = () => {
       setIsListening(false);
+      console.log('🎤 Listening stopped');
     };
 
     recognitionRef.current = recognition;
@@ -247,12 +273,15 @@ const ChatInterface = () => {
               <button
                 type="button"
                 onClick={toggleMicrophone}
-                className={`p-3 rounded-xl transition-all ${isListening 
+                className={`p-3 rounded-xl transition-all relative ${isListening 
                   ? 'bg-red-500/20 text-red-400 animate-pulse' 
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}
-                title={isListening ? "Stop Listening" : "Start Microphone"}
+                title={isListening ? "Stop Listening (Click or just stop talking)" : "Start Microphone - Speak continuously"}
               >
                 {isListening ? <MicOff size={20} /> : <Mic size={20} />}
+                {isListening && (
+                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-ping" />
+                )}
               </button>
             </div>
             <textarea
@@ -280,7 +309,7 @@ const ChatInterface = () => {
             </button>
           </form>
           <p className="text-xs text-slate-600 mt-2 text-center">
-            💡 Tip: Cmd/Ctrl + Enter to send • Expand for longer brain dumps
+            💡 Tip: {isListening ? '🎤 Speaking... text appears in real-time' : 'Cmd/Ctrl + Enter to send • Click 🎤 for continuous voice input'}
           </p>
         </div>
       </div>
