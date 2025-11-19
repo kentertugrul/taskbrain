@@ -1,4 +1,4 @@
-import React, { useState, createContext, useContext } from 'react';
+import React, { useState, createContext, useContext, useEffect } from 'react';
 import { HashRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -6,17 +6,24 @@ import {
   MessageSquare,
   Settings,
   Command,
-  BrainCircuit
+  BrainCircuit,
+  Network
 } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import TaskBrain from './pages/TaskBrain';
-import ChatSimulator from './pages/ChatDebug';
-import { Task } from './types';
+import ChatInterface from './pages/ChatInterface';
+import MindMap from './pages/MindMap';
+import { Task, CalendarConfig } from './types';
 import { INITIAL_TASKS } from './services/mockData';
+import * as SupabaseService from './services/supabaseService';
 
 interface AppState {
   tasks: Task[];
   apiKey: string;
+  calendarToken: string | null;
+  connectedCalendars: CalendarConfig[];
+  setCalendarToken: (token: string | null) => void;
+  setConnectedCalendars: (calendars: CalendarConfig[]) => void;
   addTask: (task: Task) => void;
   updateTask: (taskId: string, updates: Partial<Task>) => void;
   deleteTask: (taskId: string) => void;
@@ -48,7 +55,7 @@ const SidebarItem = ({ to, icon: Icon, label }: { to: string, icon: any, label: 
   );
 };
 
-const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+const Layout: React.FC<{ children: React.ReactNode; isLoading: boolean }> = ({ children, isLoading }) => {
   return (
     <div className="min-h-screen bg-slate-950 flex font-sans text-slate-200 selection:bg-indigo-500/30">
       <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col fixed h-full z-20">
@@ -60,15 +67,20 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         </div>
 
         <nav className="flex-1 px-4 space-y-2 mt-4">
-          <SidebarItem to="/" icon={LayoutDashboard} label="Overview" />
+          <SidebarItem to="/" icon={MessageSquare} label="Chat" />
           <SidebarItem to="/tasks" icon={CheckSquare} label="Tasks" />
-          <SidebarItem to="/simulator" icon={MessageSquare} label="WhatsApp Sim" />
+          <SidebarItem to="/mindmap" icon={Network} label="Mind Map" />
+          <SidebarItem to="/dashboard" icon={LayoutDashboard} label="Dashboard" />
         </nav>
 
         <div className="p-4 border-t border-slate-800">
-          <div className="flex items-center gap-3 text-xs text-emerald-400 bg-emerald-950/30 px-3 py-2 rounded-lg border border-emerald-900/50">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            System Online
+          <div className={`flex items-center gap-3 text-xs px-3 py-2 rounded-lg border ${
+            useSupabase 
+              ? 'text-emerald-400 bg-emerald-950/30 border-emerald-900/50' 
+              : 'text-amber-400 bg-amber-950/30 border-amber-900/50'
+          }`}>
+            <div className={`w-2 h-2 rounded-full ${useSupabase ? 'bg-emerald-500' : 'bg-amber-500'} animate-pulse`} />
+            {useSupabase ? 'Supabase Connected' : 'Mock Data Mode'}
           </div>
         </div>
       </aside>
@@ -89,7 +101,16 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         </header>
 
         <div className="p-8 flex-1 overflow-auto">
-          {children}
+          {isLoading ? (
+            <div className="flex items-center justify-center h-full">
+              <div className="text-center">
+                <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                <p className="text-slate-400">Loading tasks...</p>
+              </div>
+            </div>
+          ) : (
+            children
+          )}
         </div>
       </main>
     </div>
@@ -97,29 +118,116 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 };
 
 const App = () => {
-  const [tasks, setTasks] = useState<Task[]>(INITIAL_TASKS);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [calendarToken, setCalendarToken] = useState<string | null>(null);
+  const [connectedCalendars, setConnectedCalendars] = useState<CalendarConfig[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const apiKey = process.env.API_KEY || '';
+  
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const useSupabase = !!(supabaseUrl && import.meta.env.VITE_SUPABASE_ANON_KEY);
 
-  const addTask = (task: Task) => {
-    setTasks(prev => [task, ...prev]);
+  // Load tasks from Supabase or use mock data
+  useEffect(() => {
+    const loadTasks = async () => {
+      if (useSupabase) {
+        try {
+          console.log('📡 Loading tasks from Supabase...');
+          const fetchedTasks = await SupabaseService.fetchTasks();
+          setTasks(fetchedTasks);
+          console.log(`✅ Loaded ${fetchedTasks.length} tasks from Supabase`);
+        } catch (error) {
+          console.error('❌ Supabase error, using mock data:', error);
+          setTasks(INITIAL_TASKS);
+        }
+      } else {
+        console.log('📦 Using mock data (Supabase not configured)');
+        setTasks(INITIAL_TASKS);
+      }
+      setIsLoading(false);
+    };
+    loadTasks();
+  }, [useSupabase]);
+
+  // Subscribe to real-time updates
+  useEffect(() => {
+    if (!useSupabase) return;
+    
+    const subscription = SupabaseService.subscribeToTasks(async () => {
+      console.log('🔄 Tasks updated, reloading...');
+      const fetchedTasks = await SupabaseService.fetchTasks();
+      setTasks(fetchedTasks);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [useSupabase]);
+
+  const addTask = async (task: Task) => {
+    if (useSupabase) {
+      try {
+        const newTask = await SupabaseService.createTask(task);
+        setTasks(prev => [newTask, ...prev]);
+        console.log('✅ Task saved to Supabase:', newTask.id);
+      } catch (error) {
+        console.error('❌ Failed to save task:', error);
+        alert('Failed to save task to database');
+      }
+    } else {
+      setTasks(prev => [task, ...prev]);
+    }
   };
 
-  const updateTask = (taskId: string, updates: Partial<Task>) => {
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
+  const updateTask = async (taskId: string, updates: Partial<Task>) => {
+    if (useSupabase) {
+      try {
+        await SupabaseService.updateTask(taskId, updates);
+        setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
+        console.log('✅ Task updated in Supabase:', taskId);
+      } catch (error) {
+        console.error('❌ Failed to update task:', error);
+        alert('Failed to update task in database');
+      }
+    } else {
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...updates } : t));
+    }
   };
 
-  const deleteTask = (taskId: string) => {
-    setTasks(prev => prev.filter(t => t.id !== taskId));
+  const deleteTask = async (taskId: string) => {
+    if (useSupabase) {
+      try {
+        await SupabaseService.deleteTask(taskId);
+        setTasks(prev => prev.filter(t => t.id !== taskId));
+        console.log('✅ Task deleted from Supabase:', taskId);
+      } catch (error) {
+        console.error('❌ Failed to delete task:', error);
+        alert('Failed to delete task from database');
+      }
+    } else {
+      setTasks(prev => prev.filter(t => t.id !== taskId));
+    }
   };
 
   return (
-    <AppContext.Provider value={{ tasks, apiKey, addTask, updateTask, deleteTask }}>
+    <AppContext.Provider value={{ 
+      tasks, 
+      apiKey, 
+      calendarToken, 
+      connectedCalendars, 
+      setCalendarToken, 
+      setConnectedCalendars, 
+      addTask, 
+      updateTask, 
+      deleteTask 
+    }}>
       <HashRouter>
-        <Layout>
+        <Layout isLoading={isLoading}>
           <Routes>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={<ChatInterface />} />
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/tasks" element={<TaskBrain />} />
-            <Route path="/simulator" element={<ChatSimulator />} />
+            <Route path="/mindmap" element={<MindMap />} />
           </Routes>
         </Layout>
       </HashRouter>

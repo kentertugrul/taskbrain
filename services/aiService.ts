@@ -30,7 +30,8 @@ Current Date/Time: ${new Date().toISOString()}
 export const parseUserMessage = async (
   apiKey: string,
   userMessage: string,
-  currentContext: Task[]
+  currentContext: Task[],
+  model: string = 'gemini-2.0-flash-exp'
 ): Promise<AiInterpretation> => {
   if (!apiKey) throw new Error("API Key missing");
 
@@ -38,12 +39,11 @@ export const parseUserMessage = async (
 
   try {
     const response = await ai.models.generateContent({
-      model: 'gemini-3.0-flash',
+      model: model,
       contents: userMessage,
       config: {
         systemInstruction: SYSTEM_INSTRUCTION,
-        responseMimeType: "application/json",
-        thinkingConfig: { thinkingBudget: 1024 }
+        responseMimeType: "application/json"
       },
     });
 
@@ -55,7 +55,7 @@ export const parseUserMessage = async (
   }
 };
 
-export const suggestNextTask = async (apiKey: string, tasks: Task[]): Promise<string> => {
+export const suggestNextTask = async (apiKey: string, tasks: Task[], model: string = 'gemini-2.0-flash-exp'): Promise<string> => {
   if (!apiKey) return "Please configure API Key.";
 
   const ai = new GoogleGenAI({ apiKey });
@@ -69,7 +69,7 @@ export const suggestNextTask = async (apiKey: string, tasks: Task[]): Promise<st
   `;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-3.0-flash',
+    model: model,
     contents: prompt,
   });
 

@@ -19,6 +19,16 @@ export interface SubTask {
   status: TaskStatus;
 }
 
+export interface TaskAttachment {
+  id: string;
+  name: string;
+  type: 'image' | 'video' | 'document' | 'audio' | 'other';
+  url: string;
+  size: number; // bytes
+  uploadedAt: string;
+  thumbnail?: string;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -29,8 +39,28 @@ export interface Task {
   dueAt?: string; // ISO
   createdAt: string;
   estimatedMinutes?: number;
-  sourceChannel: 'WHATSAPP' | 'WEB';
+  sourceChannel: 'WHATSAPP' | 'WEB' | 'EMAIL';
   subtasks: SubTask[];
+  category?: 'WORK' | 'PERSONAL';
+  attachments?: TaskAttachment[];
+  emailForwardAddress?: string;
+}
+
+export interface CalendarConfig {
+  id: string;
+  summary: string; // Name of the calendar
+  color?: string;
+  selected: boolean;
+  primary?: boolean;
+}
+
+export interface CalendarEvent {
+  id: string;
+  title: string;
+  start: string; // ISO
+  end: string; // ISO
+  calendarId: string;
+  link?: string;
 }
 
 export interface AiSubTaskDTO {

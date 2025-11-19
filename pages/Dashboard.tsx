@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useAppContext } from '../App';
-import { Clock, Calendar, CheckCircle2, AlertCircle, ArrowRight } from 'lucide-react';
+import { Clock, Calendar, CheckCircle2, AlertCircle, ArrowRight, X, Check } from 'lucide-react';
 import { suggestNextTask } from '../services/aiService';
-import { TaskStatus, TaskDecision } from '../types';
+import { listCalendars, listEvents } from '../services/calendarService';
+import { TaskStatus, TaskDecision, CalendarConfig } from '../types';
 
 const StatCard = ({ label, value, icon: Icon, color }: any) => (
   <div className="bg-slate-900 border border-slate-800 p-6 rounded-2xl flex items-start justify-between hover:border-slate-700 transition-all group">
@@ -17,8 +18,12 @@ const StatCard = ({ label, value, icon: Icon, color }: any) => (
 );
 
 const Dashboard = () => {
-  const { tasks, apiKey } = useAppContext();
+  const { tasks, apiKey, connectedCalendars, setConnectedCalendars, setCalendarToken } = useAppContext();
   const [nextTaskSuggestion, setNextTaskSuggestion] = useState<string>("Analyzing priority matrix...");
+  
+  const [isCalendarModalOpen, setIsCalendarModalOpen] = useState(false);
+  const [availableCalendars, setAvailableCalendars] = useState<CalendarConfig[]>([]);
+  const [isLoadingCalendars, setIsLoadingCalendars] = useState(false);
 
   const stats = {
     backlog: tasks.filter(t => t.status === TaskStatus.BACKLOG).length,
@@ -29,30 +34,70 @@ const Dashboard = () => {
 
   useEffect(() => {
     const fetchSuggestion = async () => {
-      if (!apiKey) {
-        setNextTaskSuggestion("Configure API Key in Simulator tab to get AI suggestions.");
-        return;
-      }
-      try {
-        const suggestion = await suggestNextTask(apiKey, tasks);
-        setNextTaskSuggestion(suggestion);
-      } catch (e) {
-        setNextTaskSuggestion("Could not generate suggestion.");
-      }
+        if (!apiKey) {
+            setNextTaskSuggestion("Configure API Key in Simulator tab to get AI suggestions.");
+            return;
+        }
+        try {
+            const suggestion = await suggestNextTask(apiKey, tasks);
+            setNextTaskSuggestion(suggestion);
+        } catch (e) {
+            setNextTaskSuggestion("Could not generate suggestion.");
+        }
     };
     fetchSuggestion();
   }, [tasks, apiKey]);
 
-  return (
-    <div className="max-w-6xl mx-auto space-y-8">
+  const handleConnectCalendar = async () => {
+    console.log("🔵 Connect Calendar clicked");
+    setIsLoadingCalendars(true);
+    setIsCalendarModalOpen(true);
+    console.log("🔵 Modal opened, loading...");
+    try {
+        // Simulate Auth Flow
+        const token = "mock-token-" + Date.now();
+        setCalendarToken(token);
+        
+        console.log("🔵 Fetching calendars...");
+        const cals = await listCalendars(token);
+        console.log("🔵 Calendars fetched:", cals);
+        setAvailableCalendars(cals);
+    } catch (error) {
+        console.error("❌ Failed to connect calendar", error);
+        alert("Failed to load calendars. Check console for details.");
+    } finally {
+        setIsLoadingCalendars(false);
+        console.log("🔵 Loading complete");
+    }
+  };
 
+  const toggleCalendarSelection = (id: string) => {
+    setAvailableCalendars(prev => prev.map(c => 
+        c.id === id ? { ...c, selected: !c.selected } : c
+    ));
+  };
+
+  const saveCalendarSelection = () => {
+    const selected = availableCalendars.filter(c => c.selected);
+    setConnectedCalendars(selected);
+    setIsCalendarModalOpen(false);
+  };
+
+  return (
+    <div className="max-w-6xl mx-auto space-y-8 relative">
+      
       <div className="flex justify-between items-end">
         <div>
-          <h2 className="text-3xl font-bold text-white mb-2">Good Morning, User</h2>
-          <p className="text-slate-400">Here is your brain dump status for today.</p>
+            <h2 className="text-3xl font-bold text-white mb-2">Good Morning, User</h2>
+            <p className="text-slate-400">Here is your brain dump status for today.</p>
         </div>
-        <button className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-lg font-medium flex items-center gap-2 transition-colors shadow-lg shadow-indigo-900/20">
-          <Calendar size={18} /> Connect Google Calendar
+        <button 
+            onClick={handleConnectCalendar}
+            disabled={isLoadingCalendars}
+            className="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-lg font-medium flex items-center gap-2 transition-colors shadow-lg shadow-indigo-900/20 disabled:opacity-50"
+        >
+            <Calendar size={18} /> 
+            {connectedCalendars.length > 0 ? 'Manage Calendars' : 'Connect Google Calendar'}
         </button>
       </div>
 
@@ -65,62 +110,132 @@ const Dashboard = () => {
 
       <div className="bg-gradient-to-br from-indigo-900/50 to-slate-900 border border-indigo-500/30 rounded-3xl p-8 relative overflow-hidden">
         <div className="absolute top-0 right-0 p-32 bg-indigo-600/20 blur-[100px] rounded-full pointer-events-none"></div>
-
+        
         <div className="relative z-10">
-          <div className="flex items-center gap-2 text-indigo-400 font-medium mb-4">
-            <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
-            WHAT SHOULD I DO NOW?
-          </div>
+            <div className="flex items-center gap-2 text-indigo-400 font-medium mb-4">
+                <div className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
+                WHAT SHOULD I DO NOW?
+            </div>
+            
+            <h3 className="text-2xl md:text-4xl font-bold text-white leading-tight max-w-3xl mb-6">
+                "{nextTaskSuggestion}"
+            </h3>
 
-          <h3 className="text-2xl md:text-4xl font-bold text-white leading-tight max-w-3xl mb-6">
-            "{nextTaskSuggestion}"
-          </h3>
-
-          <div className="flex gap-4">
-            <button className="bg-white text-indigo-950 px-6 py-3 rounded-xl font-bold hover:bg-indigo-50 transition-colors flex items-center gap-2">
-              Start Focus Session <ArrowRight size={18} />
-            </button>
-            <button className="bg-slate-800 text-white px-6 py-3 rounded-xl font-semibold hover:bg-slate-700 border border-slate-700 transition-colors">
-              Delay 1 Hour
-            </button>
-          </div>
+            <div className="flex gap-4">
+                <button className="bg-white text-indigo-950 px-6 py-3 rounded-xl font-bold hover:bg-indigo-50 transition-colors flex items-center gap-2">
+                    Start Focus Session <ArrowRight size={18} />
+                </button>
+                <button className="bg-slate-800 text-white px-6 py-3 rounded-xl font-semibold hover:bg-slate-700 border border-slate-700 transition-colors">
+                    Delay 1 Hour
+                </button>
+            </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-          <h4 className="text-lg font-bold text-white mb-4">Recent Tasks</h4>
-          <div className="space-y-3">
-            {tasks.slice(0, 3).map(task => (
-              <div key={task.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-950/50 border border-slate-800/50">
-                <div className="flex items-center gap-3">
-                  <div className={`w-2 h-2 rounded-full ${task.decision === TaskDecision.DO ? 'bg-emerald-500' : 'bg-slate-500'}`} />
-                  <span className="text-slate-200">{task.title}</span>
-                </div>
-                <span className="text-xs font-mono text-slate-500">{task.status}</span>
-              </div>
-            ))}
-          </div>
+            <h4 className="text-lg font-bold text-white mb-4">Recent Tasks</h4>
+            <div className="space-y-3">
+                {tasks.slice(0, 3).map(task => (
+                    <div key={task.id} className="flex items-center justify-between p-3 rounded-lg bg-slate-950/50 border border-slate-800/50">
+                        <div className="flex items-center gap-3">
+                            <div className={`w-2 h-2 rounded-full ${task.decision === TaskDecision.DO ? 'bg-emerald-500' : 'bg-slate-500'}`} />
+                            <span className="text-slate-200">{task.title}</span>
+                        </div>
+                        <span className="text-xs font-mono text-slate-500">{task.status}</span>
+                    </div>
+                ))}
+            </div>
         </div>
 
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6">
-          <h4 className="text-lg font-bold text-white mb-4">System Health</h4>
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="text-slate-400">WhatsApp Webhook</span>
-              <span className="text-emerald-400 text-sm font-medium bg-emerald-950/50 px-2 py-1 rounded">Active</span>
+            <h4 className="text-lg font-bold text-white mb-4">System Health</h4>
+            <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                    <span className="text-slate-400">WhatsApp Webhook</span>
+                    <span className="text-emerald-400 text-sm font-medium bg-emerald-950/50 px-2 py-1 rounded">Active</span>
+                </div>
+                <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Google Calendar API</span>
+                    {connectedCalendars.length > 0 ? (
+                         <span className="text-emerald-400 text-sm font-medium bg-emerald-950/50 px-2 py-1 rounded flex items-center gap-1">
+                            <Check size={12} /> {connectedCalendars.length} Cal(s)
+                         </span>
+                    ) : (
+                        <span className="text-amber-400 text-sm font-medium bg-amber-950/50 px-2 py-1 rounded">Pending Auth</span>
+                    )}
+                </div>
+                <div className="flex justify-between items-center">
+                    <span className="text-slate-400">Priority Engine</span>
+                    <span className="text-emerald-400 text-sm font-medium bg-emerald-950/50 px-2 py-1 rounded">Online (v1.0)</span>
+                </div>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-slate-400">Google Calendar API</span>
-              <span className="text-amber-400 text-sm font-medium bg-amber-950/50 px-2 py-1 rounded">Pending Auth</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-slate-400">Priority Engine</span>
-              <span className="text-emerald-400 text-sm font-medium bg-emerald-950/50 px-2 py-1 rounded">Online (v1.0)</span>
-            </div>
-          </div>
         </div>
       </div>
+
+      {isCalendarModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md shadow-2xl p-6 animate-in zoom-in-95 duration-200">
+                <div className="flex justify-between items-center mb-6">
+                    <h3 className="text-xl font-bold text-white">Select Calendars</h3>
+                    <button onClick={() => setIsCalendarModalOpen(false)} className="text-slate-400 hover:text-white">
+                        <X size={20} />
+                    </button>
+                </div>
+                
+                {isLoadingCalendars ? (
+                    <div className="flex flex-col items-center justify-center py-12">
+                        <div className="w-8 h-8 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin mb-4" />
+                        <p className="text-slate-400 text-sm">Loading calendars...</p>
+                    </div>
+                ) : availableCalendars.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12">
+                        <p className="text-slate-400 text-sm">No calendars found</p>
+                    </div>
+                ) : (
+                    <div className="space-y-3 mb-6">
+                        {availableCalendars.map(cal => (
+                        <div 
+                            key={cal.id} 
+                            onClick={() => toggleCalendarSelection(cal.id)}
+                            className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all
+                                ${cal.selected 
+                                    ? 'bg-indigo-900/20 border-indigo-500/50' 
+                                    : 'bg-slate-950 border-slate-800 hover:border-slate-700'}`}
+                        >
+                            <div className={`w-5 h-5 rounded-md flex items-center justify-center border transition-colors
+                                ${cal.selected ? 'bg-indigo-600 border-indigo-600' : 'border-slate-600'}`}>
+                                {cal.selected && <Check size={12} className="text-white" />}
+                            </div>
+                            <div>
+                                <div className="text-sm font-medium text-slate-200">{cal.summary}</div>
+                                <div className="text-xs text-slate-500">ID: {cal.id}</div>
+                            </div>
+                            <div className="ml-auto w-2 h-2 rounded-full" style={{ backgroundColor: cal.color }} />
+                        </div>
+                        ))}
+                    </div>
+                )}
+
+                {!isLoadingCalendars && availableCalendars.length > 0 && (
+                    <div className="flex gap-3">
+                    <button 
+                        onClick={() => setIsCalendarModalOpen(false)}
+                        className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium py-2.5 rounded-xl transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button 
+                        onClick={saveCalendarSelection}
+                        className="flex-1 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-2.5 rounded-xl transition-colors shadow-lg shadow-indigo-900/20"
+                    >
+                        Sync Selected
+                    </button>
+                    </div>
+                )}
+            </div>
+        </div>
+      )}
     </div>
   );
 };

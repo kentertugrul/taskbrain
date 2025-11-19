@@ -11,6 +11,7 @@ export const INITIAL_TASKS: Task[] = [
     createdAt: new Date().toISOString(),
     estimatedMinutes: 60,
     sourceChannel: 'WHATSAPP',
+    category: 'WORK',
     subtasks: [
       { id: 'st-1', title: 'Write closing paragraph', status: TaskStatus.BACKLOG },
       { id: 'st-2', title: 'Send to Slack channel', status: TaskStatus.BACKLOG }
@@ -24,6 +25,7 @@ export const INITIAL_TASKS: Task[] = [
     priorityScore: 0.4,
     createdAt: new Date().toISOString(),
     sourceChannel: 'WHATSAPP',
+    category: 'PERSONAL',
     subtasks: []
   },
   {
@@ -36,6 +38,7 @@ export const INITIAL_TASKS: Task[] = [
     createdAt: new Date().toISOString(),
     estimatedMinutes: 120,
     sourceChannel: 'WEB',
+    category: 'WORK',
     subtasks: []
   }
 ];
