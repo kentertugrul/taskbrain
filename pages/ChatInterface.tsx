@@ -76,6 +76,8 @@ const ChatInterface = () => {
       console.log('🎤 Listening started with existing:', finalTranscript || input);
     };
 
+    let lastProcessedIndex = 0;
+
     recognition.onresult = (event: any) => {
       let interim = '';
       let final = '';
@@ -85,12 +87,13 @@ const ChatInterface = () => {
         clearTimeout(silenceTimerRef.current);
       }
 
-      // Loop through all results
-      for (let i = 0; i < event.results.length; i++) {
+      // Only process new results (from lastProcessedIndex onwards)
+      for (let i = lastProcessedIndex; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
         
         if (event.results[i].isFinal) {
           final += transcript + ' ';
+          lastProcessedIndex = i + 1; // Move index forward
         } else {
           interim += transcript;
         }
