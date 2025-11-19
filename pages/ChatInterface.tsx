@@ -23,13 +23,12 @@ const ChatInterface = () => {
   const [localApiKey, setLocalApiKey] = useState(apiKey || '');
   const [selectedModel, setSelectedModel] = useState<'gemini-2.0-flash-exp' | 'gemini-1.5-flash' | 'gemini-1.5-pro'>('gemini-2.0-flash-exp');
   const [isExpanded, setIsExpanded] = useState(false);
-  const [interimTranscript, setInterimTranscript] = useState('');
-  const [finalTranscript, setFinalTranscript] = useState('');
   const [showSendPrompt, setShowSendPrompt] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<any>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const accumulatedTextRef = useRef<string>(''); // Track accumulated voice text
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -44,14 +43,9 @@ const ChatInterface = () => {
 
   const toggleMicrophone = () => {
     if (isListening) {
-      // Stop listening and save the text
+      // Stop listening
       recognitionRef.current?.stop();
-      return; // onend handler will save the text
-    }
-
-    // Starting fresh or continuing - preserve existing input
-    if (!finalTranscript && input) {
-      setFinalTranscript(input);
+      return;
     }
 
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -60,95 +54,85 @@ const ChatInterface = () => {
       return;
     }
 
+    // When starting, save current input to accumulated text
+    if (input && !accumulatedTextRef.current) {
+      accumulatedTextRef.current = input;
+    }
+
     const recognition = new SpeechRecognition();
-    recognition.continuous = true; // Keep listening
-    recognition.interimResults = true; // Show partial results in real-time
+    recognition.continuous = true;
+    recognition.interimResults = true;
     recognition.lang = 'en-US';
+    recognition.maxAlternatives = 1;
+
+    let currentSessionText = '';
 
     recognition.onstart = () => {
       setIsListening(true);
-      // Only set finalTranscript from input if it's empty (first time)
-      // Otherwise keep what we had (for continue speaking)
-      if (!finalTranscript) {
-        setFinalTranscript(input);
-      }
-      setInterimTranscript('');
-      console.log('🎤 Listening started with existing:', finalTranscript || input);
+      currentSessionText = '';
+      console.log('🎤 Started. Accumulated so far:', accumulatedTextRef.current);
     };
-
-    let lastProcessedIndex = 0;
 
     recognition.onresult = (event: any) => {
-      let interim = '';
-      let final = '';
-
-      // Clear any existing silence timer
-      if (silenceTimerRef.current) {
-        clearTimeout(silenceTimerRef.current);
-      }
-
-      // Only process new results (from lastProcessedIndex onwards)
-      for (let i = lastProcessedIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        
-        if (event.results[i].isFinal) {
-          final += transcript + ' ';
-          lastProcessedIndex = i + 1; // Move index forward
-        } else {
-          interim += transcript;
-        }
-      }
-
-      // Update state with both interim (streaming) and final text
-      if (final) {
-        setFinalTranscript(prev => prev + final);
-        setInterimTranscript('');
-      } else {
-        setInterimTranscript(interim);
-      }
-
-      // Set a timer to auto-stop after 2 seconds of silence
-      silenceTimerRef.current = setTimeout(() => {
-        if (recognitionRef.current) {
-          console.log('🤫 Silence detected, stopping mic...');
-          recognitionRef.current.stop();
-          setShowSendPrompt(true);
-        }
-      }, 2000); // 2 seconds of silence
-    };
-
-    recognition.onerror = (event: any) => {
-      console.error("Speech recognition error", event.error);
-      if (event.error !== 'aborted') {
-        setIsListening(false);
-        // Save what we have so far
-        const combined = (finalTranscript + interimTranscript).trim();
-        if (combined) {
-          setInput(combined);
-        }
-        setFinalTranscript('');
-        setInterimTranscript('');
-      }
-    };
-
-    recognition.onend = () => {
-      console.log('🎤 Listening stopped');
-      setIsListening(false);
-      
       // Clear silence timer
       if (silenceTimerRef.current) {
         clearTimeout(silenceTimerRef.current);
       }
-      
-      // Save everything to input (keep the transcript!)
-      const combined = (finalTranscript + interimTranscript).trim();
-      if (combined) {
-        setInput(combined);
-        console.log('💾 Saved transcript:', combined.length, 'characters');
+
+      let interimText = '';
+      let finalText = '';
+
+      // Build full transcript from this session
+      for (let i = 0; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalText += transcript + ' ';
+        } else {
+          interimText = transcript; // Only keep last interim
+        }
       }
-      // DON'T clear finalTranscript and interimTranscript yet
-      // They'll be used if user clicks "Continue Speaking"
-      // Only clear them when user sends the message
+
+      currentSessionText = finalText;
+      
+      // Show accumulated + current session + interim
+      const displayText = accumulatedTextRef.current + 
+                         (accumulatedTextRef.current && currentSessionText ? ' ' : '') + 
+                         currentSessionText + interimText;
+      
+      setInput(displayText);
+
+      // Auto-stop after 2 seconds of silence
+      silenceTimerRef.current = setTimeout(() => {
+        if (recognitionRef.current) {
+          console.log('🤫 Pause detected, stopping...');
+          recognitionRef.current.stop();
+        }
+      }, 2000);
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error("Speech error:", event.error);
+      setIsListening(false);
+    };
+
+    recognition.onend = () => {
+      console.log('🎤 Stopped');
+      setIsListening(false);
+      
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+      }
+      
+      // Save this session's text to accumulated
+      if (currentSessionText) {
+        accumulatedTextRef.current = accumulatedTextRef.current + 
+                                    (accumulatedTextRef.current ? ' ' : '') + 
+                                    currentSessionText;
+        setInput(accumulatedTextRef.current);
+        console.log('✅ Saved. Total:', accumulatedTextRef.current.length, 'chars');
+      }
+      
+      setShowSendPrompt(true);
     };
 
     recognitionRef.current = recognition;
@@ -159,10 +143,9 @@ const ChatInterface = () => {
     e?.preventDefault();
     if (!input.trim()) return;
     
-    // Hide send prompt and clear transcripts after sending
+    // Hide send prompt and clear accumulated text after sending
     setShowSendPrompt(false);
-    setFinalTranscript('');
-    setInterimTranscript('');
+    accumulatedTextRef.current = '';
     
     if (!apiKey) {
       setMessages(prev => [...prev, {
@@ -343,10 +326,11 @@ const ChatInterface = () => {
             </div>
             <textarea
               ref={inputRef}
-              value={isListening ? (finalTranscript + interimTranscript) : input}
+              value={input}
               onChange={(e) => {
                 if (!isListening) {
                   setInput(e.target.value);
+                  accumulatedTextRef.current = e.target.value;
                 }
               }}
               placeholder="Brain dump everything... Tell me about all your tasks, meetings, ideas, to-dos. I'll organize them for you! 🧠"
