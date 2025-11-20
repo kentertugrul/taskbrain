@@ -36,9 +36,9 @@ Add these 3 variables:
 
 | Name | Value |
 |------|-------|
-| `API_KEY` | `AIzaSyCQNw2gSC8Xy2HrqCBDHPSxax9WR0akv_g` |
-| `VITE_SUPABASE_URL` | `https://vjflwknbzdjkcnyzoiqb.supabase.co` |
-| `VITE_SUPABASE_ANON_KEY` | `sb_publishable_dXsCm-ATEyjBtiyT5ahBWg_di0_nDl6` |
+| `API_KEY` | `YOUR_GOOGLE_API_KEY` |
+| `VITE_SUPABASE_URL` | `YOUR_SUPABASE_URL` |
+| `VITE_SUPABASE_ANON_KEY` | `YOUR_SUPABASE_ANON_KEY` |
 
 Click **Save** → **Redeploy**
 
