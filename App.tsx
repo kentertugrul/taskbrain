@@ -7,21 +7,26 @@ import {
   Settings,
   Command,
   BrainCircuit,
-  Network
+  Network,
+  LogOut,
+  User
 } from 'lucide-react';
 import Dashboard from './pages/Dashboard';
 import TaskBrain from './pages/TaskBrain';
 import ChatInterface from './pages/ChatInterface';
 import MindMap from './pages/MindMap';
+import Auth from './pages/Auth';
 import { Task, CalendarConfig } from './types';
 import { INITIAL_TASKS } from './services/mockData';
 import * as SupabaseService from './services/supabaseService';
+import { supabase } from './services/supabaseService';
 
 interface AppState {
   tasks: Task[];
   apiKey: string;
   calendarToken: string | null;
   connectedCalendars: CalendarConfig[];
+  user: any;
   setCalendarToken: (token: string | null) => void;
   setConnectedCalendars: (calendars: CalendarConfig[]) => void;
   addTask: (task: Task) => void;
@@ -55,7 +60,23 @@ const SidebarItem = ({ to, icon: Icon, label }: { to: string, icon: any, label: 
   );
 };
 
-const Layout: React.FC<{ children: React.ReactNode; isLoading: boolean; useSupabase: boolean }> = ({ children, isLoading, useSupabase }) => {
+const Layout: React.FC<{ 
+  children: React.ReactNode; 
+  isLoading: boolean; 
+  useSupabase: boolean;
+  user: any;
+  onLogout: () => void;
+}> = ({ children, isLoading, useSupabase, user, onLogout }) => {
+  const getUserInitials = () => {
+    if (user?.user_metadata?.name) {
+      return user.user_metadata.name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2);
+    }
+    if (user?.email) {
+      return user.email[0].toUpperCase();
+    }
+    return 'U';
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 flex font-sans text-slate-200 selection:bg-indigo-500/30">
       <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col fixed h-full z-20">
@@ -63,7 +84,10 @@ const Layout: React.FC<{ children: React.ReactNode; isLoading: boolean; useSupab
           <div className="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center shadow-lg shadow-indigo-500/20">
             <BrainCircuit size={20} className="text-white" />
           </div>
-          <h1 className="text-lg font-bold tracking-tight text-white">Task Brain</h1>
+          <div>
+            <h1 className="text-lg font-bold tracking-tight text-white leading-none">Task Brain</h1>
+            <span className="text-xs text-slate-500 font-mono">v0.1.1</span>
+          </div>
         </div>
 
         <nav className="flex-1 px-4 space-y-2 mt-4">
@@ -73,7 +97,7 @@ const Layout: React.FC<{ children: React.ReactNode; isLoading: boolean; useSupab
           <SidebarItem to="/dashboard" icon={LayoutDashboard} label="Dashboard" />
         </nav>
 
-        <div className="p-4 border-t border-slate-800">
+        <div className="p-4 border-t border-slate-800 space-y-3">
           <div className={`flex items-center gap-3 text-xs px-3 py-2 rounded-lg border ${
             useSupabase 
               ? 'text-emerald-400 bg-emerald-950/30 border-emerald-900/50' 
@@ -82,6 +106,29 @@ const Layout: React.FC<{ children: React.ReactNode; isLoading: boolean; useSupab
             <div className={`w-2 h-2 rounded-full ${useSupabase ? 'bg-emerald-500' : 'bg-amber-500'} animate-pulse`} />
             {useSupabase ? 'Supabase Connected' : 'Mock Data Mode'}
           </div>
+          
+          {user && (
+            <div className="flex items-center gap-3 px-3 py-2 bg-slate-800 rounded-lg">
+              <div className="w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-500/50 text-indigo-300 flex items-center justify-center text-xs font-bold">
+                {getUserInitials()}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm text-white truncate">
+                  {user.user_metadata?.name || user.email?.split('@')[0]}
+                </div>
+                <div className="text-xs text-slate-400 truncate">
+                  {user.email}
+                </div>
+              </div>
+              <button
+                onClick={onLogout}
+                className="p-1.5 text-slate-400 hover:text-red-400 transition-colors rounded hover:bg-slate-700"
+                title="Sign out"
+              >
+                <LogOut size={16} />
+              </button>
+            </div>
+          )}
         </div>
       </aside>
 
@@ -94,9 +141,6 @@ const Layout: React.FC<{ children: React.ReactNode; isLoading: boolean; useSupab
             <button className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center hover:bg-slate-700 transition-colors">
               <Settings size={16} className="text-slate-400" />
             </button>
-            <div className="w-8 h-8 rounded-full bg-indigo-500/20 border border-indigo-500/50 text-indigo-300 flex items-center justify-center text-xs font-bold">
-              JD
-            </div>
           </div>
         </header>
 
@@ -122,32 +166,65 @@ const App = () => {
   const [calendarToken, setCalendarToken] = useState<string | null>(null);
   const [connectedCalendars, setConnectedCalendars] = useState<CalendarConfig[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState<any>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const apiKey = process.env.API_KEY || '';
   
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
   const useSupabase = !!(supabaseUrl && import.meta.env.VITE_SUPABASE_ANON_KEY);
 
-  // Load tasks from Supabase or use mock data
+  // Check auth state
   useEffect(() => {
-    const loadTasks = async () => {
-      if (useSupabase) {
-        try {
-          console.log('📡 Loading tasks from Supabase...');
-          const fetchedTasks = await SupabaseService.fetchTasks();
-          setTasks(fetchedTasks);
-          console.log(`✅ Loaded ${fetchedTasks.length} tasks from Supabase`);
-        } catch (error) {
-          console.error('❌ Supabase error, using mock data:', error);
-          setTasks(INITIAL_TASKS);
-        }
+    if (!useSupabase) {
+      setAuthLoading(false);
+      return;
+    }
+
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+      setAuthLoading(false);
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+      if (session) {
+        // Reload tasks when user logs in
+        loadTasks();
       } else {
-        console.log('📦 Using mock data (Supabase not configured)');
+        // Clear tasks when user logs out
+        setTasks([]);
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, [useSupabase]);
+
+  const loadTasks = async () => {
+    if (useSupabase && user) {
+      try {
+        console.log('📡 Loading tasks from Supabase...');
+        const fetchedTasks = await SupabaseService.fetchTasks();
+        setTasks(fetchedTasks);
+        console.log(`✅ Loaded ${fetchedTasks.length} tasks from Supabase`);
+      } catch (error) {
+        console.error('❌ Supabase error, using mock data:', error);
         setTasks(INITIAL_TASKS);
       }
-      setIsLoading(false);
-    };
-    loadTasks();
-  }, [useSupabase]);
+    } else if (!useSupabase) {
+      console.log('📦 Using mock data (Supabase not configured)');
+      setTasks(INITIAL_TASKS);
+    }
+    setIsLoading(false);
+  };
+
+  // Load tasks when user is authenticated
+  useEffect(() => {
+    if (!authLoading) {
+      loadTasks();
+    }
+  }, [useSupabase, user, authLoading]);
 
   // Subscribe to real-time updates
   useEffect(() => {
@@ -209,12 +286,35 @@ const App = () => {
     }
   };
 
+  const handleLogout = async () => {
+    if (useSupabase) {
+      await supabase.auth.signOut();
+    }
+  };
+
+  // Show auth screen if using Supabase and not authenticated
+  if (useSupabase && authLoading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-slate-400">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (useSupabase && !user) {
+    return <Auth />;
+  }
+
   return (
     <AppContext.Provider value={{ 
       tasks, 
       apiKey, 
       calendarToken, 
       connectedCalendars, 
+      user,
       setCalendarToken, 
       setConnectedCalendars, 
       addTask, 
@@ -222,7 +322,7 @@ const App = () => {
       deleteTask 
     }}>
       <HashRouter>
-        <Layout isLoading={isLoading} useSupabase={useSupabase}>
+        <Layout isLoading={isLoading} useSupabase={useSupabase} user={user} onLogout={handleLogout}>
           <Routes>
             <Route path="/" element={<ChatInterface />} />
             <Route path="/dashboard" element={<Dashboard />} />

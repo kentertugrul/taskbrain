@@ -25,11 +25,15 @@ API_KEY=your_gemini_api_key_here
 # Supabase (Required for production)
 VITE_SUPABASE_URL=your_supabase_project_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+
+# Google Calendar API (Optional - for calendar integration)
+VITE_GOOGLE_CLIENT_ID=your_google_oauth_client_id
 ```
 
 **Get your keys:**
 - Gemini API: [Google AI Studio](https://aistudio.google.com/app/apikey)
 - Supabase: Follow [docs/SUPABASE_SETUP.md](docs/SUPABASE_SETUP.md)
+- Google Calendar: [Google Cloud Console](https://console.cloud.google.com/apis/credentials) (see below)
 
 ### 3. Run Development Server
 ```bash
@@ -58,7 +62,7 @@ npm run build
 - 🎨 **Mind Map Visualization** - See your tasks as an interactive force-directed graph
 - 📊 **Smart Categorization** - Work vs Personal tasks with color coding
 - 🎯 **Priority Management** - AI calculates urgency and importance
-- 📅 **Calendar Integration** - Connect multiple Google Calendars
+- 📅 **Calendar Integration** - Connect multiple Google Calendars (real API integration)
 - 🎙️ **Voice Input** - Speak your tasks (browser speech recognition)
 
 ## 🛠️ Tech Stack
@@ -68,6 +72,17 @@ npm run build
 - **AI**: Google Gemini 2.0
 - **Routing**: React Router v7
 - **Icons**: Lucide React
+
+## 🔧 Google Calendar Setup
+
+For detailed step-by-step instructions, see [docs/GOOGLE_CALENDAR_SETUP.md](docs/GOOGLE_CALENDAR_SETUP.md)
+
+**Quick setup:**
+1. Create a Google Cloud project
+2. Enable Google Calendar API
+3. Configure OAuth consent screen
+4. Create OAuth 2.0 credentials (Web application)
+5. Add `VITE_GOOGLE_CLIENT_ID` to your `.env` file
 
 ## 📝 License
 

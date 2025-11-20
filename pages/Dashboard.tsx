@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useAppContext } from '../App';
 import { Clock, Calendar, CheckCircle2, AlertCircle, ArrowRight, X, Check } from 'lucide-react';
 import { suggestNextTask } from '../services/aiService';
-import { listCalendars, listEvents } from '../services/calendarService';
+import { listCalendars, listEvents, getGoogleAccessToken, initializeGoogleAuth } from '../services/calendarService';
 import { TaskStatus, TaskDecision, CalendarConfig } from '../types';
 
 const StatCard = ({ label, value, icon: Icon, color }: any) => (
@@ -51,20 +51,50 @@ const Dashboard = () => {
   const handleConnectCalendar = async () => {
     console.log("🔵 Connect Calendar clicked");
     setIsLoadingCalendars(true);
-    setIsCalendarModalOpen(true);
-    console.log("🔵 Modal opened, loading...");
+    
     try {
-        // Simulate Auth Flow
-        const token = "mock-token-" + Date.now();
-        setCalendarToken(token);
+        // Get Google OAuth Client ID from environment
+        const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID;
         
-        console.log("🔵 Fetching calendars...");
-        const cals = await listCalendars(token);
-        console.log("🔵 Calendars fetched:", cals);
+        if (!googleClientId) {
+            alert('Google Client ID not configured. Please add VITE_GOOGLE_CLIENT_ID to your .env file.');
+            setIsLoadingCalendars(false);
+            return;
+        }
+
+        // Initialize Google Auth
+        await initializeGoogleAuth(googleClientId);
+        
+        // Get access token
+        console.log("🔵 Requesting Google Calendar access...");
+        console.log("🔵 Client ID:", googleClientId);
+        
+        const accessToken = await getGoogleAccessToken(googleClientId);
+        console.log("✅ Access token received:", accessToken ? accessToken.substring(0, 20) + '...' : 'null');
+        
+        if (!accessToken) {
+            throw new Error('Failed to get access token');
+        }
+        
+        // Store token
+        setCalendarToken(accessToken);
+        
+        // Fetch calendars
+        console.log("🔵 Fetching calendars with token...");
+        const cals = await listCalendars(accessToken);
+        console.log("✅ Calendars fetched:", cals);
+        console.log("✅ Number of calendars:", cals.length);
+        
+        if (cals.length === 0) {
+            alert('No calendars found. Make sure you have calendars in your Google account.');
+        }
+        
+        // Open modal with calendars
         setAvailableCalendars(cals);
-    } catch (error) {
+        setIsCalendarModalOpen(true);
+    } catch (error: any) {
         console.error("❌ Failed to connect calendar", error);
-        alert("Failed to load calendars. Check console for details.");
+        alert(`Failed to connect Google Calendar: ${error.message || 'Unknown error'}`);
     } finally {
         setIsLoadingCalendars(false);
         console.log("🔵 Loading complete");
@@ -177,7 +207,10 @@ const Dashboard = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-200">
             <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md shadow-2xl p-6 animate-in zoom-in-95 duration-200">
                 <div className="flex justify-between items-center mb-6">
-                    <h3 className="text-xl font-bold text-white">Select Calendars</h3>
+                    <div>
+                        <h3 className="text-xl font-bold text-white">Select Calendars</h3>
+                        <p className="text-xs text-slate-400 mt-1">Found {availableCalendars.length} calendar{availableCalendars.length !== 1 ? 's' : ''}</p>
+                    </div>
                     <button onClick={() => setIsCalendarModalOpen(false)} className="text-slate-400 hover:text-white">
                         <X size={20} />
                     </button>
@@ -207,9 +240,11 @@ const Dashboard = () => {
                                 ${cal.selected ? 'bg-indigo-600 border-indigo-600' : 'border-slate-600'}`}>
                                 {cal.selected && <Check size={12} className="text-white" />}
                             </div>
-                            <div>
-                                <div className="text-sm font-medium text-slate-200">{cal.summary}</div>
-                                <div className="text-xs text-slate-500">ID: {cal.id}</div>
+                            <div className="flex-1 min-w-0">
+                                <div className="text-sm font-medium text-slate-200 truncate">{cal.summary}</div>
+                                {cal.primary && (
+                                    <div className="text-xs text-emerald-400 mt-0.5">Primary calendar</div>
+                                )}
                             </div>
                             <div className="ml-auto w-2 h-2 rounded-full" style={{ backgroundColor: cal.color }} />
                         </div>

@@ -4,6 +4,7 @@ import { Task, TaskStatus, TaskDecision, TaskAttachment } from '../types';
 import { format } from 'date-fns';
 import { GoogleGenAI } from "@google/genai";
 import { generateEmailForwardAddress } from '../services/emailService';
+import { uploadFile, deleteFile } from '../services/supabaseService';
 
 interface TaskDetailModalProps {
   task: Task;
@@ -33,6 +34,7 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, onUpda
   const [isListening, setIsListening] = useState(false);
   const [localAttachments, setLocalAttachments] = useState<TaskAttachment[]>(task.attachments || []);
   const [emailCopied, setEmailCopied] = useState(false);
+  const [uploadingFiles, setUploadingFiles] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const recognitionRef = useRef<any>(null);
@@ -86,40 +88,52 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, onUpda
     recognition.start();
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
 
-    Array.from(files).forEach(file => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const attachment: TaskAttachment = {
-          id: `att-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-          name: file.name,
-          type: file.type.startsWith('image/') ? 'image' :
-                file.type.startsWith('video/') ? 'video' :
-                file.type.startsWith('audio/') ? 'audio' :
-                file.type.includes('pdf') || file.type.includes('document') ? 'document' : 'other',
-          url: event.target?.result as string,
-          size: file.size,
-          uploadedAt: new Date().toISOString(),
-          thumbnail: file.type.startsWith('image/') ? event.target?.result as string : undefined
-        };
-
+    const filesArray = Array.from(files);
+    
+    for (const file of filesArray) {
+      const fileId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      setUploadingFiles(prev => new Set(prev).add(fileId));
+      
+      try {
+        const attachment = await uploadFile(file, task.id);
+        
         const newAttachments = [...localAttachments, attachment];
         setLocalAttachments(newAttachments);
         onUpdate({ attachments: newAttachments });
-      };
-      reader.readAsDataURL(file);
-    });
+      } catch (error: any) {
+        console.error('Failed to upload file:', error);
+        alert(`Failed to upload ${file.name}: ${error.message || 'Unknown error'}`);
+      } finally {
+        setUploadingFiles(prev => {
+          const next = new Set(prev);
+          next.delete(fileId);
+          return next;
+        });
+      }
+    }
 
     e.target.value = '';
   };
 
-  const handleDeleteAttachment = (attachmentId: string) => {
-    const newAttachments = localAttachments.filter(a => a.id !== attachmentId);
-    setLocalAttachments(newAttachments);
-    onUpdate({ attachments: newAttachments });
+  const handleDeleteAttachment = async (attachmentId: string) => {
+    const attachment = localAttachments.find(a => a.id === attachmentId);
+    if (!attachment) return;
+
+    if (!window.confirm(`Delete ${attachment.name}?`)) return;
+
+    try {
+      await deleteFile(attachment, task.id);
+      const newAttachments = localAttachments.filter(a => a.id !== attachmentId);
+      setLocalAttachments(newAttachments);
+      onUpdate({ attachments: newAttachments });
+    } catch (error: any) {
+      console.error('Failed to delete attachment:', error);
+      alert(`Failed to delete ${attachment.name}: ${error.message || 'Unknown error'}`);
+    }
   };
 
   const formatFileSize = (bytes: number): string => {
@@ -368,13 +382,19 @@ Response: {"reply": "✅ Updated! Due date is now next Monday at 2pm.", "updates
                 accept="image/*,video/*,.pdf,.doc,.docx,.txt"
               />
 
-              {localAttachments.length === 0 ? (
+              {localAttachments.length === 0 && uploadingFiles.size === 0 ? (
                 <div className="text-center py-6 border-2 border-dashed border-slate-800 rounded-lg">
                   <Paperclip size={24} className="mx-auto text-slate-600 mb-2" />
                   <p className="text-slate-500 text-xs">No attachments yet</p>
                 </div>
               ) : (
                 <div className="space-y-2">
+                  {uploadingFiles.size > 0 && (
+                    <div className="flex items-center gap-3 p-3 bg-slate-950 rounded-lg border border-slate-800">
+                      <Loader2 size={16} className="text-indigo-400 animate-spin" />
+                      <div className="text-sm text-slate-400">Uploading {uploadingFiles.size} file{uploadingFiles.size > 1 ? 's' : ''}...</div>
+                    </div>
+                  )}
                   {localAttachments.map(att => (
                     <div key={att.id} className="flex items-center gap-3 p-3 bg-slate-950 rounded-lg border border-slate-800 group hover:border-slate-700">
                       {att.thumbnail ? (

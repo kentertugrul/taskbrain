@@ -16,7 +16,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 export const fetchTasks = async (): Promise<Task[]> => {
   console.log('📡 Fetching tasks from Supabase...');
   
-  const { data: tasks, error } = await supabase
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  const query = supabase
     .from('tasks')
     .select(`
       *,
@@ -24,6 +26,13 @@ export const fetchTasks = async (): Promise<Task[]> => {
       attachments (*)
     `)
     .order('created_at', { ascending: false });
+
+  // If user is authenticated, filter by user_id
+  if (user) {
+    query.eq('user_id', user.id);
+  }
+
+  const { data: tasks, error } = await query;
 
   if (error) {
     console.error('❌ Supabase fetch error:', error);
@@ -55,6 +64,8 @@ export const fetchTasks = async (): Promise<Task[]> => {
 export const createTask = async (task: Omit<Task, 'id' | 'createdAt'>): Promise<Task> => {
   console.log('📝 Creating task in Supabase:', task);
   
+  const { data: { user } } = await supabase.auth.getUser();
+  
   const { data, error } = await supabase
     .from('tasks')
     .insert([{
@@ -66,7 +77,8 @@ export const createTask = async (task: Omit<Task, 'id' | 'createdAt'>): Promise<
       due_at: task.dueAt,
       estimated_minutes: task.estimatedMinutes,
       source_channel: task.sourceChannel,
-      category: task.category
+      category: task.category,
+      user_id: user?.id || null
     }])
     .select()
     .single();
@@ -195,8 +207,11 @@ export const fetchTaskById = async (taskId: string): Promise<Task> => {
 
 // Upload file to Supabase Storage
 export const uploadFile = async (file: File, taskId: string): Promise<TaskAttachment> => {
+  const { data: { user } } = await supabase.auth.getUser();
   const fileExt = file.name.split('.').pop();
-  const fileName = `${taskId}/${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
+  // Include user ID in path for better organization
+  const userPrefix = user?.id ? `${user.id}/` : '';
+  const fileName = `${userPrefix}${taskId}/${Date.now()}-${Math.random().toString(36).substr(2, 9)}.${fileExt}`;
   
   const { data, error } = await supabase.storage
     .from('task-attachments')
@@ -234,6 +249,35 @@ export const uploadFile = async (file: File, taskId: string): Promise<TaskAttach
   }]);
 
   return attachment;
+};
+
+// Delete file from Supabase Storage
+export const deleteFile = async (attachment: TaskAttachment, taskId: string): Promise<void> => {
+  // Extract file path from URL
+  // URL format: https://{project}.supabase.co/storage/v1/object/public/task-attachments/{path}
+  const urlParts = attachment.url.split('/task-attachments/');
+  if (urlParts.length > 1) {
+    const filePath = urlParts[1];
+    const { error } = await supabase.storage
+      .from('task-attachments')
+      .remove([filePath]);
+    
+    if (error) {
+      console.error('Failed to delete file from storage:', error);
+      // Don't throw - we still want to delete the DB record
+    }
+  }
+  
+  // Delete attachment record from database
+  const { error } = await supabase
+    .from('attachments')
+    .delete()
+    .eq('id', attachment.id);
+  
+  if (error) {
+    console.error('Failed to delete attachment record:', error);
+    throw error;
+  }
 };
 
 // Real-time subscriptions
