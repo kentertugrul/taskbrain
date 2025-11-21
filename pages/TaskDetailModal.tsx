@@ -1,10 +1,11 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Sparkles, Send, Calendar, Clock, Tag, Briefcase, Home, ListTree, ChevronRight, Loader2, Mic, MicOff, Paperclip, FileText, Image as ImageIcon, Video, File, Download, Trash2, Mail, Copy, Check } from 'lucide-react';
+import { X, Sparkles, Send, Calendar, Clock, Tag, Briefcase, Home, ListTree, ChevronRight, Loader2, Mic, MicOff, Paperclip, FileText, Image as ImageIcon, Video, File, Download, Trash2, Mail, Copy, Check, Circle } from 'lucide-react';
 import { Task, TaskStatus, TaskDecision, TaskAttachment } from '../types';
 import { format } from 'date-fns';
 import { GoogleGenAI } from "@google/genai";
 import { generateEmailForwardAddress } from '../services/emailService';
 import { uploadFile, deleteFile } from '../services/supabaseService';
+import { VoiceRecorder } from '../services/whisperService';
 
 interface TaskDetailModalProps {
   task: Task;
@@ -33,13 +34,20 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, onUpda
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [liveTranscript, setLiveTranscript] = useState('');
   const [localAttachments, setLocalAttachments] = useState<TaskAttachment[]>(task.attachments || []);
   const [emailCopied, setEmailCopied] = useState(false);
   const [uploadingFiles, setUploadingFiles] = useState<Set<string>>(new Set());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const recognitionRef = useRef<any>(null);
+  const voiceRecorderRef = useRef<VoiceRecorder>(new VoiceRecorder());
+  const webSpeechRef = useRef<any>(null);
+  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const inputRef_value = useRef<string>('');
+  const liveTranscriptRef_value = useRef<string>('');
+  const isListeningRef = useRef<boolean>(false);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -49,44 +57,121 @@ const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, onUpda
     inputRef.current?.focus();
   }, []);
 
-  const toggleMicrophone = () => {
-    if (isListening) {
-      recognitionRef.current?.stop();
+  // Keep refs in sync with state
+  useEffect(() => {
+    inputRef_value.current = input;
+  }, [input]);
+
+  useEffect(() => {
+    liveTranscriptRef_value.current = liveTranscript;
+  }, [liveTranscript]);
+
+  const toggleMicrophone = async () => {
+    const recorder = voiceRecorderRef.current;
+
+    if (isListeningRef.current) {
+      // Stop recording
+      const currentInput = inputRef_value.current;
+      const currentLiveText = liveTranscriptRef_value.current;
+      const combinedText = currentInput + (currentInput && currentLiveText ? ' ' : '') + currentLiveText;
+      
+      // Stop Web Speech
+      if (webSpeechRef.current) {
+        webSpeechRef.current.stop();
+      }
+      
+      // Clear silence timer
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+      }
+
+      // Update state
+      setInput(combinedText);
+      inputRef_value.current = combinedText;
+      setLiveTranscript('');
+      liveTranscriptRef_value.current = '';
       setIsListening(false);
+      isListeningRef.current = false;
+      setIsTranscribing(true);
+
+      try {
+        const audioBlob = await recorder.stopRecording();
+
+        // Send to Whisper API for final accurate transcript
+        const formData = new FormData();
+        formData.append('file', audioBlob, 'audio.webm');
+
+        const response = await fetch('/api/transcribe', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!response.ok) {
+          throw new Error('Whisper transcription failed');
+        }
+
+        const { text } = await response.json();
+        
+        // Combine original input with Whisper's accurate transcript
+        const finalText = currentInput + (currentInput && text ? ' ' : '') + text;
+        setInput(finalText);
+        inputRef_value.current = finalText;
+
+      } catch (error: any) {
+        console.error('❌ Whisper error:', error);
+      } finally {
+        setIsTranscribing(false);
+      }
       return;
     }
 
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert("Your browser does not support Speech Recognition.");
-      return;
-    }
+    // Start recording
+    try {
+      await recorder.startRecording();
+      
+      // Start Web Speech for live preview
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
 
-    const recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.lang = 'en-US';
+        recognition.onresult = (event: any) => {
+          if (silenceTimerRef.current) {
+            clearTimeout(silenceTimerRef.current);
+          }
 
-    recognition.onstart = () => {
+          let currentText = '';
+          for (let i = 0; i < event.results.length; i++) {
+            currentText += event.results[i][0].transcript;
+          }
+          
+          setLiveTranscript(currentText);
+          liveTranscriptRef_value.current = currentText;
+
+          // Auto-stop after 3 seconds of silence
+          silenceTimerRef.current = setTimeout(() => {
+            toggleMicrophone();
+          }, 3000);
+        };
+
+        recognition.onerror = (event: any) => {
+          console.log('Web Speech error (non-critical):', event.error);
+        };
+
+        recognition.start();
+        webSpeechRef.current = recognition;
+      }
+      
       setIsListening(true);
-    };
-
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      setInput(prev => prev + (prev ? ' ' : '') + transcript);
-    };
-
-    recognition.onerror = (event: any) => {
-      console.error("Speech recognition error", event.error);
-      setIsListening(false);
-    };
-
-    recognition.onend = () => {
-      setIsListening(false);
-    };
-
-    recognitionRef.current = recognition;
-    recognition.start();
+      isListeningRef.current = true;
+      setLiveTranscript('');
+      
+    } catch (error: any) {
+      console.error('Failed to start recording:', error);
+      alert('Failed to access microphone. Please grant permission.');
+    }
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -543,12 +628,30 @@ Response: {"reply": "✅ Task deleted.", "action": "delete"}`;
               <button
                 type="button"
                 onClick={toggleMicrophone}
-                className={`p-3 rounded-xl transition-all ${isListening 
-                  ? 'bg-red-500/20 text-red-400 animate-pulse' 
-                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}
-                title={isListening ? "Stop Listening" : "Start Microphone"}
+                disabled={isTranscribing}
+                className={`p-3 rounded-xl transition-all relative ${
+                  isTranscribing 
+                    ? 'bg-amber-500/20 text-amber-400' 
+                    : isListening 
+                    ? 'bg-red-500/20 text-red-400 animate-pulse' 
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'
+                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                title={
+                  isTranscribing ? 'Transcribing with Whisper...' :
+                  isListening ? 'Stop Recording' : 
+                  'Start Recording (Whisper AI)'
+                }
               >
-                {isListening ? <MicOff size={18} /> : <Mic size={18} />}
+                {isTranscribing ? (
+                  <Circle size={18} className="animate-spin" />
+                ) : isListening ? (
+                  <MicOff size={18} />
+                ) : (
+                  <Mic size={18} />
+                )}
+                {isListening && (
+                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-ping" />
+                )}
               </button>
               <button
                 type="button"
@@ -561,8 +664,17 @@ Response: {"reply": "✅ Task deleted.", "action": "delete"}`;
               <input
                 ref={inputRef}
                 type="text"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
+                value={
+                  isListening ? (input + (input && liveTranscript ? ' ' : '') + liveTranscript) :
+                  input
+                }
+                onChange={(e) => {
+                  if (!isListening && !isTranscribing) {
+                    const newValue = e.target.value;
+                    setInput(newValue);
+                    inputRef_value.current = newValue;
+                  }
+                }}
                 placeholder="e.g., Change due date to next Monday..."
                 className="flex-1 bg-slate-950 text-white border border-slate-700 rounded-xl py-3 px-4 focus:outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/50 transition-all placeholder:text-slate-600 text-sm"
               />
