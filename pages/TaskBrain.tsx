@@ -30,11 +30,11 @@ const DecisionBadge = ({ decision }: { decision: TaskDecision }) => {
   return <span className={`text-xs font-mono uppercase tracking-wider ${colors[decision]}`}>{decision}</span>;
 };
 
-const TaskItem: React.FC<{ 
-  task: Task; 
-  onToggle: (id: string) => void; 
-  onDelete: (id: string) => void; 
-  onStatusChange: (id: string, status: TaskStatus) => void; 
+const TaskItem: React.FC<{
+  task: Task;
+  onToggle: (id: string) => void;
+  onDelete: (id: string) => void;
+  onStatusChange: (id: string, status: TaskStatus) => void;
   onOpen: (task: Task) => void;
   isSelected: boolean;
   onToggleSelect: (id: string, e: React.MouseEvent) => void;
@@ -50,7 +50,7 @@ const TaskItem: React.FC<{
   const hasSubtasks = task.subtasks && task.subtasks.length > 0;
 
   return (
-    <div 
+    <div
       draggable
       onDragStart={() => onDragStart(task.id)}
       onDragOver={(e) => onDragOver(e, task.id)}
@@ -61,26 +61,25 @@ const TaskItem: React.FC<{
         if ((e.target as HTMLElement).closest('button, select, input, .checkbox-select')) return;
         onOpen(task);
       }}
-      className={`group bg-slate-900 border rounded-xl p-4 transition-all duration-200 cursor-move ${
-        isDragging ? 'opacity-50 scale-95 border-indigo-500' :
-        isDragOver ? 'border-indigo-500 ring-2 ring-indigo-500/50 transform -translate-y-1' :
-        isSelected 
-          ? 'border-indigo-500 bg-indigo-950/20' 
-          : 'border-slate-800 hover:border-indigo-500/50'
-      }`}
+      className={`group bg-slate-900 border rounded-xl p-4 transition-all duration-200 cursor-move ${isDragging ? 'opacity-50 scale-95 border-indigo-500' :
+          isDragOver ? 'border-indigo-500 ring-2 ring-indigo-500/50 transform -translate-y-1' :
+            isSelected
+              ? 'border-indigo-500 bg-indigo-950/20'
+              : 'border-slate-800 hover:border-indigo-500/50'
+        }`}
     >
       <div className="flex items-center justify-between">
         <div className="flex items-start gap-4">
           {/* Selection Checkbox */}
-          <div 
+          <div
             onClick={(e) => onToggleSelect(task.id, e)}
             className={`checkbox-select mt-1 w-4 h-4 rounded border-2 flex items-center justify-center cursor-pointer transition-colors
             ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'border-slate-600 hover:border-indigo-500'}`}>
             {isSelected && <Check size={10} className="text-white" />}
           </div>
-          
+
           {/* Completion Checkbox */}
-          <div 
+          <div
             onClick={(e) => { e.stopPropagation(); onToggle(task.id); }}
             className={`mt-1 w-4 h-4 rounded-full border-2 flex items-center justify-center cursor-pointer transition-colors
             ${task.status === TaskStatus.DONE ? 'bg-emerald-600 border-emerald-600' : 'border-slate-600 hover:border-emerald-500'}`}>
@@ -124,10 +123,10 @@ const TaskItem: React.FC<{
             {hasSubtasks && !showSubtasks && (
               <div className="mt-2 flex items-center gap-2">
                 <div className="flex-1 bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                  <div 
+                  <div
                     className="h-full bg-gradient-to-r from-emerald-600 to-emerald-500 transition-all duration-300"
-                    style={{ 
-                      width: `${(task.subtasks.filter(st => st.status === TaskStatus.DONE).length / task.subtasks.length) * 100}%` 
+                    style={{
+                      width: `${(task.subtasks.filter(st => st.status === TaskStatus.DONE).length / task.subtasks.length) * 100}%`
                     }}
                   />
                 </div>
@@ -157,13 +156,13 @@ const TaskItem: React.FC<{
 
         <div className="flex items-center gap-4">
           <div className="text-right hidden md:block">
-              <div className="text-xs text-slate-500 mb-1">Priority</div>
-              <div className="flex items-center gap-1 text-indigo-400 font-mono text-sm">
-                  <ArrowUpCircle size={14} />
-                  {Math.round(task.priorityScore * 100)}
-              </div>
+            <div className="text-xs text-slate-500 mb-1">Priority</div>
+            <div className="flex items-center gap-1 text-indigo-400 font-mono text-sm">
+              <ArrowUpCircle size={14} />
+              {Math.round(task.priorityScore * 100)}
+            </div>
           </div>
-          
+
           {/* Status Dropdown */}
           <div className="relative">
             <select
@@ -176,9 +175,9 @@ const TaskItem: React.FC<{
               ))}
             </select>
           </div>
-          
+
           {/* Delete Button */}
-          <button 
+          <button
             onClick={() => onDelete(task.id)}
             className="text-slate-600 hover:text-red-400 p-2 transition-colors"
             title="Delete task"
@@ -211,6 +210,7 @@ const TaskItem: React.FC<{
 const TaskBrain = () => {
   const { tasks, addTask, updateTask, deleteTask, apiKey } = useAppContext();
   const [filter, setFilter] = useState<'ALL' | TaskStatus>('ALL');
+  const [categoryFilter, setCategoryFilter] = useState<'ALL' | 'WORK' | 'PERSONAL'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -229,8 +229,8 @@ const TaskBrain = () => {
   const handleToggleTask = (taskId: string) => {
     const task = tasks.find(t => t.id === taskId);
     if (task) {
-      updateTask(taskId, { 
-        status: task.status === TaskStatus.DONE ? TaskStatus.BACKLOG : TaskStatus.DONE 
+      updateTask(taskId, {
+        status: task.status === TaskStatus.DONE ? TaskStatus.BACKLOG : TaskStatus.DONE
       });
     }
   };
@@ -292,11 +292,12 @@ const TaskBrain = () => {
 
   const filteredTasks = tasks
     .filter(t => filter === 'ALL' ? true : t.status === filter)
+    .filter(t => categoryFilter === 'ALL' ? true : t.category === categoryFilter)
     .filter(t => {
       if (!searchQuery) return true;
       const query = searchQuery.toLowerCase();
-      return t.title.toLowerCase().includes(query) || 
-             t.description?.toLowerCase().includes(query);
+      return t.title.toLowerCase().includes(query) ||
+        t.description?.toLowerCase().includes(query);
     });
 
   const handleDragStart = (taskId: string) => {
@@ -315,19 +316,19 @@ const TaskBrain = () => {
       // Reorder tasks in the main tasks array
       const draggedIndex = tasks.findIndex(t => t.id === draggedTaskId);
       const targetIndex = tasks.findIndex(t => t.id === dragOverTaskId);
-      
+
       if (draggedIndex !== -1 && targetIndex !== -1) {
         const reorderedTasks = [...tasks];
         const [removed] = reorderedTasks.splice(draggedIndex, 1);
         reorderedTasks.splice(targetIndex, 0, removed);
-        
+
         // Update all tasks with new priority scores to maintain order
         reorderedTasks.forEach((task, index) => {
           updateTask(task.id, { priorityScore: 1 - (index / reorderedTasks.length) });
         });
       }
     }
-    
+
     setDraggedTaskId(null);
     setDragOverTaskId(null);
   };
@@ -474,14 +475,14 @@ const TaskBrain = () => {
               </button>
             </>
           )}
-          
+
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={16} />
-            <input 
+            <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search tasks..." 
+              placeholder="Search tasks..."
               className="bg-slate-900 border border-slate-800 rounded-lg pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500 w-64 transition-colors"
             />
           </div>
@@ -500,15 +501,30 @@ const TaskBrain = () => {
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2 overflow-x-auto pb-2">
           {['ALL', TaskStatus.BACKLOG, TaskStatus.SCHEDULED, TaskStatus.DONE].map((status) => (
-            <button 
+            <button
               key={status}
               onClick={() => setFilter(status as any)}
               className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors
-                ${filter === status 
-                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/30' 
+                ${filter === status
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/30'
                   : 'bg-slate-900 text-slate-400 border border-slate-800 hover:border-slate-700'}`}
             >
               {status}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 border-l border-slate-800 pl-4 ml-4">
+          {['ALL', 'WORK', 'PERSONAL'].map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setCategoryFilter(cat as any)}
+              className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-colors
+                ${categoryFilter === cat
+                  ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/30'
+                  : 'bg-slate-900 text-slate-400 border border-slate-800 hover:border-slate-700'}`}
+            >
+              {cat === 'ALL' ? 'All Categories' : cat.charAt(0) + cat.slice(1).toLowerCase()}
             </button>
           ))}
         </div>
@@ -518,11 +534,10 @@ const TaskBrain = () => {
             onClick={handleToggleSelectAll}
             className="text-sm text-slate-400 hover:text-indigo-400 transition-colors flex items-center gap-2"
           >
-            <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${
-              selectedTaskIds.size === filteredTasks.length 
-                ? 'bg-indigo-600 border-indigo-600' 
+            <div className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-colors ${selectedTaskIds.size === filteredTasks.length
+                ? 'bg-indigo-600 border-indigo-600'
                 : 'border-slate-600'
-            }`}>
+              }`}>
               {selectedTaskIds.size === filteredTasks.length && <Check size={10} className="text-white" />}
             </div>
             Select All
@@ -539,8 +554,8 @@ const TaskBrain = () => {
           </div>
         ) : (
           filteredTasks.map(task => (
-            <TaskItem 
-              key={task.id} 
+            <TaskItem
+              key={task.id}
               task={task}
               onToggle={handleToggleTask}
               onDelete={handleDeleteTask}
