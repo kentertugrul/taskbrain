@@ -10,7 +10,15 @@ console.log('🔧 Supabase Config:', {
   keyPrefix: supabaseAnonKey.substring(0, 20) 
 });
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    storageKey: 'task-brain-auth',
+    storage: window.localStorage,
+  }
+});
 
 // Task Operations
 export const fetchTasks = async (): Promise<Task[]> => {

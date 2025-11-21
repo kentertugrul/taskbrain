@@ -1,5 +1,5 @@
 import React, { useState, createContext, useContext, useEffect } from 'react';
-import { HashRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
   CheckSquare,
@@ -321,7 +321,7 @@ const App = () => {
       updateTask, 
       deleteTask 
     }}>
-      <HashRouter>
+      <BrowserRouter>
         <Layout isLoading={isLoading} useSupabase={useSupabase} user={user} onLogout={handleLogout}>
           <Routes>
             <Route path="/" element={<ChatInterface />} />
@@ -330,7 +330,7 @@ const App = () => {
             <Route path="/mindmap" element={<MindMap />} />
           </Routes>
         </Layout>
-      </HashRouter>
+      </BrowserRouter>
     </AppContext.Provider>
   );
 };
