@@ -474,6 +474,7 @@ const TaskBrain = () => {
           task={selectedTask}
           onClose={() => setSelectedTask(null)}
           onUpdate={handleUpdateTask}
+          onDelete={deleteTask}
           apiKey={apiKey}
         />
       )}

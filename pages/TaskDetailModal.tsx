@@ -10,6 +10,7 @@ interface TaskDetailModalProps {
   task: Task;
   onClose: () => void;
   onUpdate: (updates: Partial<Task>) => void;
+  onDelete?: (taskId: string) => void;
   apiKey: string;
 }
 
@@ -20,7 +21,7 @@ interface ChatMessage {
   timestamp: string;
 }
 
-const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, onUpdate, apiKey }) => {
+const TaskDetailModal: React.FC<TaskDetailModalProps> = ({ task, onClose, onUpdate, onDelete, apiKey }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([
     {
       id: '1',
@@ -190,26 +191,33 @@ CURRENT TASK:
 When the user asks to change something, respond with JSON:
 {
   "reply": "Friendly confirmation message (mention what changed)",
+  "action": "update" or "delete",
   "updates": {
     "title": "new title if changed",
     "description": "new description if changed or elaborated",
     "dueAt": "ISO-8601 datetime if changed (e.g., ${new Date().toISOString()})",
     "priorityScore": number 0.0-1.0 if changed,
     "category": "WORK" or "PERSONAL" if changed,
-    "estimatedMinutes": number if changed
+    "estimatedMinutes": number if changed,
+    "status": "BACKLOG" | "SCHEDULED" | "IN_PROGRESS" | "DONE" | "CANCELLED" if changed
   }
 }
 
 IMPORTANT:
+- If user says "remove", "delete", "cancel" this task, set action to "delete"
 - Only include fields in "updates" that should be changed
 - For date/time changes, convert natural language to ISO-8601 format
-- If user says "high priority" set priorityScore to 0.9, "medium" to 0.5, "low" to 0.2
+- If user says "high priority" set priorityScore to 0.9, "medium" to 0.5, "low" to 0.2, "urgent" to 1.0
+- If user says "mark as done/complete", set status to "DONE"
 - If just asking questions or chatting, only include "reply"
 - Current date/time: ${new Date().toISOString()}
 
-Example:
+Examples:
 User: "Change due date to next Monday at 2pm"
-Response: {"reply": "✅ Updated! Due date is now next Monday at 2pm.", "updates": {"dueAt": "2025-11-25T14:00:00.000Z"}}`;
+Response: {"reply": "✅ Updated! Due date is now next Monday at 2pm.", "action": "update", "updates": {"dueAt": "2025-11-25T14:00:00.000Z"}}
+
+User: "Remove this task" or "Delete this"
+Response: {"reply": "✅ Task deleted.", "action": "delete"}`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-2.0-flash-exp',
@@ -229,8 +237,25 @@ Response: {"reply": "✅ Updated! Due date is now next Monday at 2pm.", "updates
       };
       setMessages(prev => [...prev, botMsg]);
 
+      // Handle delete action
+      if (aiResponse.action === 'delete') {
+        if (onDelete) {
+          setTimeout(() => {
+            onDelete(task.id);
+            onClose();
+          }, 500);
+        } else {
+          setMessages(prev => [...prev, {
+            id: Date.now().toString(),
+            role: 'assistant',
+            content: "I can't delete tasks yet, but I can mark it as cancelled.",
+            timestamp: new Date().toISOString()
+          }]);
+          onUpdate({ status: TaskStatus.CANCELLED });
+        }
+      }
       // Apply updates if any
-      if (aiResponse.updates && Object.keys(aiResponse.updates).length > 0) {
+      else if (aiResponse.updates && Object.keys(aiResponse.updates).length > 0) {
         onUpdate(aiResponse.updates);
       }
 
