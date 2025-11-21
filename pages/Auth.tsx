@@ -56,10 +56,15 @@ const Auth: React.FC = () => {
     setError(null);
 
     try {
+      // Use production URL if deployed, otherwise use current origin
+      const redirectUrl = window.location.hostname === 'localhost' 
+        ? window.location.origin 
+        : 'https://kent.ertugrul.one';
+      
       const { error: googleError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: window.location.origin,
+          redirectTo: redirectUrl,
           queryParams: {
             access_type: 'offline',
             prompt: 'consent',
