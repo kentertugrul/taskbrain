@@ -38,19 +38,32 @@ const TaskItem: React.FC<{
   onOpen: (task: Task) => void;
   isSelected: boolean;
   onToggleSelect: (id: string, e: React.MouseEvent) => void;
-}> = ({ task, onToggle, onDelete, onStatusChange, onOpen, isSelected, onToggleSelect }) => {
+  onDragStart: (id: string) => void;
+  onDragOver: (e: React.DragEvent, id: string) => void;
+  onDragEnd: () => void;
+  onDragLeave: () => void;
+  isDragging: boolean;
+  isDragOver: boolean;
+}> = ({ task, onToggle, onDelete, onStatusChange, onOpen, isSelected, onToggleSelect, onDragStart, onDragOver, onDragEnd, onDragLeave, isDragging, isDragOver }) => {
   const [showSubtasks, setShowSubtasks] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const hasSubtasks = task.subtasks && task.subtasks.length > 0;
 
   return (
     <div 
+      draggable
+      onDragStart={() => onDragStart(task.id)}
+      onDragOver={(e) => onDragOver(e, task.id)}
+      onDragEnd={onDragEnd}
+      onDragLeave={onDragLeave}
       onClick={(e) => {
         // Don't open if clicking on interactive elements
         if ((e.target as HTMLElement).closest('button, select, input, .checkbox-select')) return;
         onOpen(task);
       }}
-      className={`group bg-slate-900 border rounded-xl p-4 transition-all duration-200 cursor-pointer ${
+      className={`group bg-slate-900 border rounded-xl p-4 transition-all duration-200 cursor-move ${
+        isDragging ? 'opacity-50 scale-95 border-indigo-500' :
+        isDragOver ? 'border-indigo-500 ring-2 ring-indigo-500/50 transform -translate-y-1' :
         isSelected 
           ? 'border-indigo-500 bg-indigo-950/20' 
           : 'border-slate-800 hover:border-indigo-500/50'
@@ -177,6 +190,8 @@ const TaskBrain = () => {
   const [newSubtasks, setNewSubtasks] = useState<string[]>([]);
   const [subtaskInput, setSubtaskInput] = useState('');
   const [isListening, setIsListening] = useState(false);
+  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
+  const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
 
   const handleToggleTask = (taskId: string) => {
@@ -251,6 +266,43 @@ const TaskBrain = () => {
       return t.title.toLowerCase().includes(query) || 
              t.description?.toLowerCase().includes(query);
     });
+
+  const handleDragStart = (taskId: string) => {
+    setDraggedTaskId(taskId);
+  };
+
+  const handleDragOver = (e: React.DragEvent, taskId: string) => {
+    e.preventDefault();
+    if (draggedTaskId && draggedTaskId !== taskId) {
+      setDragOverTaskId(taskId);
+    }
+  };
+
+  const handleDragEnd = () => {
+    if (draggedTaskId && dragOverTaskId && draggedTaskId !== dragOverTaskId) {
+      // Reorder tasks in the main tasks array
+      const draggedIndex = tasks.findIndex(t => t.id === draggedTaskId);
+      const targetIndex = tasks.findIndex(t => t.id === dragOverTaskId);
+      
+      if (draggedIndex !== -1 && targetIndex !== -1) {
+        const reorderedTasks = [...tasks];
+        const [removed] = reorderedTasks.splice(draggedIndex, 1);
+        reorderedTasks.splice(targetIndex, 0, removed);
+        
+        // Update all tasks with new priority scores to maintain order
+        reorderedTasks.forEach((task, index) => {
+          updateTask(task.id, { priorityScore: 1 - (index / reorderedTasks.length) });
+        });
+      }
+    }
+    
+    setDraggedTaskId(null);
+    setDragOverTaskId(null);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverTaskId(null);
+  };
 
   const toggleMicrophone = () => {
     if (isListening) {
@@ -464,6 +516,12 @@ const TaskBrain = () => {
               onOpen={handleOpenTask}
               isSelected={selectedTaskIds.has(task.id)}
               onToggleSelect={handleToggleSelect}
+              onDragStart={handleDragStart}
+              onDragOver={handleDragOver}
+              onDragEnd={handleDragEnd}
+              onDragLeave={handleDragLeave}
+              isDragging={draggedTaskId === task.id}
+              isDragOver={dragOverTaskId === task.id}
             />
           ))
         )}
