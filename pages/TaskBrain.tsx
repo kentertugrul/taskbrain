@@ -87,23 +87,55 @@ const TaskItem: React.FC<{
             {task.status === TaskStatus.DONE && <Check size={10} className="text-white" />}
           </div>
 
-          <div>
+          <div className="flex-1">
             <div className="flex items-center gap-2">
               <h4 className={`font-medium text-base ${task.status === TaskStatus.DONE ? 'text-slate-500 line-through' : 'text-slate-200'}`}>
                 {task.title}
               </h4>
               {hasSubtasks && (
                 <button
-                  onClick={() => setShowSubtasks(!showSubtasks)}
+                  onClick={(e) => { e.stopPropagation(); setShowSubtasks(!showSubtasks); }}
                   className="text-slate-500 hover:text-indigo-400 flex items-center gap-1 text-xs bg-slate-950 px-1.5 py-0.5 rounded transition-colors"
                 >
                   <ListTree size={12} />
-                  {task.subtasks.length}
+                  {task.subtasks.filter(st => st.status === TaskStatus.DONE).length}/{task.subtasks.length}
                   {showSubtasks ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
                 </button>
               )}
             </div>
-            {task.description && <p className="text-slate-400 text-sm mt-1">{task.description}</p>}
+            {task.description && <p className="text-slate-400 text-sm mt-1 line-clamp-2">{task.description}</p>}
+
+            {/* Subtask Preview (when collapsed) */}
+            {hasSubtasks && !showSubtasks && (
+              <div className="mt-2 space-y-1">
+                {task.subtasks.slice(0, 2).map(st => (
+                  <div key={st.id} className="flex items-center gap-2 text-xs text-slate-500">
+                    <div className={`w-2 h-2 rounded-sm ${st.status === TaskStatus.DONE ? 'bg-emerald-600' : 'border border-slate-600'}`} />
+                    <span className={st.status === TaskStatus.DONE ? 'line-through text-slate-600' : ''}>{st.title}</span>
+                  </div>
+                ))}
+                {task.subtasks.length > 2 && (
+                  <div className="text-xs text-slate-600 pl-4">+{task.subtasks.length - 2} more</div>
+                )}
+              </div>
+            )}
+
+            {/* Progress Bar (when has subtasks) */}
+            {hasSubtasks && !showSubtasks && (
+              <div className="mt-2 flex items-center gap-2">
+                <div className="flex-1 bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-emerald-600 to-emerald-500 transition-all duration-300"
+                    style={{ 
+                      width: `${(task.subtasks.filter(st => st.status === TaskStatus.DONE).length / task.subtasks.length) * 100}%` 
+                    }}
+                  />
+                </div>
+                <span className="text-xs text-slate-500 font-mono">
+                  {Math.round((task.subtasks.filter(st => st.status === TaskStatus.DONE).length / task.subtasks.length) * 100)}%
+                </span>
+              </div>
+            )}
 
             <div className="flex items-center gap-4 mt-3">
               <DecisionBadge decision={task.decision} />
