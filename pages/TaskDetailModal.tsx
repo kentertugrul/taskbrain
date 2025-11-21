@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { X, Sparkles, Send, Calendar, Clock, Tag, Briefcase, Home, ListTree, ChevronRight, Loader2, Mic, MicOff, Paperclip, FileText, Image as ImageIcon, Video, File, Download, Trash2, Mail, Copy, Check, Circle } from 'lucide-react';
+import { X, Sparkles, Send, Calendar, Clock, Tag, Briefcase, Home, ListTree, ChevronRight, Loader2, Mic, MicOff, Paperclip, FileText, Image as ImageIcon, Video, File, Download, Trash2, Mail, Copy, Check, Circle, Plus } from 'lucide-react';
 import { Task, TaskStatus, TaskDecision, TaskAttachment } from '../types';
 import { format } from 'date-fns';
 import { GoogleGenAI } from "@google/genai";
@@ -285,8 +285,20 @@ When the user asks to change something, respond with JSON:
     "category": "WORK" or "PERSONAL" if changed,
     "estimatedMinutes": number if changed,
     "status": "BACKLOG" | "SCHEDULED" | "IN_PROGRESS" | "DONE" | "CANCELLED" if changed
+  },
+  "subtasks": {
+    "add": [{"title": "subtask 1"}, {"title": "subtask 2"}],
+    "remove": ["subtask id to remove"],
+    "update": [{"id": "subtask id", "title": "new title", "status": "DONE"}]
   }
 }
+
+SUBTASK GENERATION:
+- If user describes steps/phases/things to do, AUTOMATICALLY break them into subtasks
+- If user says "break this down" or "add subtasks" or similar, generate logical steps
+- If user provides a description with multiple steps, extract them as subtasks
+- Each subtask should be a clear, actionable item
+- Examples of triggers: "First..then..", "Steps:", "I need to:", numbered lists, voice memos describing a process
 
 IMPORTANT:
 - If user says "remove", "delete", "cancel" this task, set action to "delete"
@@ -302,7 +314,13 @@ User: "Change due date to next Monday at 2pm"
 Response: {"reply": "✅ Updated! Due date is now next Monday at 2pm.", "action": "update", "updates": {"dueAt": "2025-11-25T14:00:00.000Z"}}
 
 User: "Remove this task" or "Delete this"
-Response: {"reply": "✅ Task deleted.", "action": "delete"}`;
+Response: {"reply": "✅ Task deleted.", "action": "delete"}
+
+User: "For the presentation task, I need to first research competitors, then create slides, then practice, and finally send to team"
+Response: {"reply": "✅ I've broken that down into 4 subtasks for you!", "action": "update", "subtasks": {"add": [{"title": "Research competitors"}, {"title": "Create slides"}, {"title": "Practice presentation"}, {"title": "Send to team"}]}}
+
+User: "Add subtasks: call vendor, get quote, schedule meeting"
+Response: {"reply": "✅ Added 3 subtasks!", "action": "update", "subtasks": {"add": [{"title": "Call vendor"}, {"title": "Get quote"}, {"title": "Schedule meeting"}]}}`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-2.0-flash-exp',
@@ -340,8 +358,46 @@ Response: {"reply": "✅ Task deleted.", "action": "delete"}`;
         }
       }
       // Apply updates if any
-      else if (aiResponse.updates && Object.keys(aiResponse.updates).length > 0) {
-        onUpdate(aiResponse.updates);
+      else {
+        const updates: any = { ...aiResponse.updates };
+        
+        // Handle subtask operations
+        if (aiResponse.subtasks) {
+          let currentSubtasks = [...task.subtasks];
+          
+          // Add new subtasks
+          if (aiResponse.subtasks.add && aiResponse.subtasks.add.length > 0) {
+            const newSubtasks = aiResponse.subtasks.add.map((st: any, idx: number) => ({
+              id: `st-${Date.now()}-${idx}-${Math.random().toString(36).substr(2, 5)}`,
+              title: st.title,
+              status: TaskStatus.BACKLOG
+            }));
+            currentSubtasks = [...currentSubtasks, ...newSubtasks];
+          }
+          
+          // Remove subtasks
+          if (aiResponse.subtasks.remove && aiResponse.subtasks.remove.length > 0) {
+            currentSubtasks = currentSubtasks.filter(st => 
+              !aiResponse.subtasks.remove.includes(st.id)
+            );
+          }
+          
+          // Update existing subtasks
+          if (aiResponse.subtasks.update && aiResponse.subtasks.update.length > 0) {
+            aiResponse.subtasks.update.forEach((update: any) => {
+              const index = currentSubtasks.findIndex(st => st.id === update.id);
+              if (index !== -1) {
+                currentSubtasks[index] = { ...currentSubtasks[index], ...update };
+              }
+            });
+          }
+          
+          updates.subtasks = currentSubtasks;
+        }
+        
+        if (Object.keys(updates).length > 0) {
+          onUpdate(updates);
+        }
       }
 
     } catch (error: any) {
@@ -453,21 +509,76 @@ Response: {"reply": "✅ Task deleted.", "action": "delete"}`;
             )}
 
             {/* Subtasks */}
-            {task.subtasks.length > 0 && (
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center justify-between">
+                <span className="flex items-center gap-2">
                   <ListTree size={14} /> Subtasks ({task.subtasks.length})
-                </label>
+                </span>
+                <button
+                  onClick={() => {
+                    const title = prompt('Enter subtask title:');
+                    if (title && title.trim()) {
+                      const newSubtask = {
+                        id: `st-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                        title: title.trim(),
+                        status: TaskStatus.BACKLOG
+                      };
+                      onUpdate({ subtasks: [...task.subtasks, newSubtask] });
+                    }
+                  }}
+                  className="text-indigo-400 hover:text-indigo-300 text-xs font-normal normal-case tracking-normal flex items-center gap-1 bg-slate-900 px-2 py-1 rounded border border-slate-700 hover:border-indigo-500 transition-colors"
+                >
+                  <Plus size={12} /> Add Subtask
+                </button>
+              </label>
+              
+              {task.subtasks.length === 0 ? (
+                <div className="text-center py-6 border-2 border-dashed border-slate-800 rounded-lg">
+                  <ListTree size={24} className="mx-auto text-slate-600 mb-2" />
+                  <p className="text-slate-500 text-xs mb-3">No subtasks yet</p>
+                  <p className="text-slate-600 text-xs px-4">
+                    💡 Tip: Describe the steps in chat and I'll create subtasks automatically!
+                  </p>
+                </div>
+              ) : (
                 <div className="space-y-2">
                   {task.subtasks.map(st => (
-                    <div key={st.id} className="flex items-center gap-3 p-3 bg-slate-950 rounded-lg border border-slate-800">
-                      <ChevronRight size={14} className="text-slate-600" />
-                      <span className="text-sm text-slate-300">{st.title}</span>
+                    <div key={st.id} className="flex items-center gap-3 p-3 bg-slate-950 rounded-lg border border-slate-800 group hover:border-slate-700">
+                      <button
+                        onClick={() => {
+                          const updated = task.subtasks.map(sub => 
+                            sub.id === st.id 
+                              ? { ...sub, status: sub.status === TaskStatus.DONE ? TaskStatus.BACKLOG : TaskStatus.DONE }
+                              : sub
+                          );
+                          onUpdate({ subtasks: updated });
+                        }}
+                        className={`w-4 h-4 rounded border flex items-center justify-center cursor-pointer transition-colors ${
+                          st.status === TaskStatus.DONE 
+                            ? 'bg-emerald-600 border-emerald-600' 
+                            : 'border-slate-600 hover:border-slate-400'
+                        }`}
+                      >
+                        {st.status === TaskStatus.DONE && <Check size={12} className="text-white" />}
+                      </button>
+                      <span className={`text-sm flex-1 ${st.status === TaskStatus.DONE ? 'text-slate-600 line-through' : 'text-slate-300'}`}>
+                        {st.title}
+                      </span>
+                      <button
+                        onClick={() => {
+                          if (window.confirm(`Delete subtask "${st.title}"?`)) {
+                            onUpdate({ subtasks: task.subtasks.filter(sub => sub.id !== st.id) });
+                          }
+                        }}
+                        className="text-slate-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                      >
+                        <X size={14} />
+                      </button>
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Attachments */}
             <div>
