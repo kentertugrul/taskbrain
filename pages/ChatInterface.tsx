@@ -7,7 +7,7 @@ import { format } from 'date-fns';
 import { VoiceRecorder } from '../services/whisperService';
 
 const ChatInterface = () => {
-  const { tasks, addTask, apiKey } = useAppContext();
+  const { tasks, addTask, updateTask, apiKey } = useAppContext();
   const [messages, setMessages] = useState<Message[]>([
     { 
       id: '1', 
@@ -214,6 +214,38 @@ const ChatInterface = () => {
         const taskCount = interpretation.tasks.length;
         const subtaskCount = interpretation.tasks.reduce((acc, t) => acc + (t.subtasks?.length || 0), 0);
         replyText = `✅ Created ${taskCount} task(s)${subtaskCount > 0 ? ` with ${subtaskCount} subtasks` : ''}.`;
+      } else if (interpretation.intent === 'UPDATE_TASKS' && interpretation.updates) {
+        // Handle bulk task updates
+        const filter = interpretation.taskFilter || {};
+        let tasksToUpdate = tasks;
+
+        // Apply filters
+        if (filter.matchPhrase) {
+          const phrase = filter.matchPhrase.toLowerCase();
+          tasksToUpdate = tasksToUpdate.filter(t => 
+            t.title.toLowerCase().includes(phrase) || 
+            (t.description && t.description.toLowerCase().includes(phrase))
+          );
+        }
+        if (filter.category) {
+          tasksToUpdate = tasksToUpdate.filter(t => t.category === filter.category);
+        }
+        if (filter.status) {
+          tasksToUpdate = tasksToUpdate.filter(t => t.status === filter.status);
+        }
+
+        // If user said "all" or similar, get recently created tasks from this session
+        if (filter.all && !filter.matchPhrase && !filter.category && !filter.status) {
+          // Update recently extracted tasks (last 10)
+          tasksToUpdate = extractedTasks.slice(0, 10);
+        }
+
+        // Apply updates
+        tasksToUpdate.forEach(task => {
+          updateTask(task.id, interpretation.updates!);
+        });
+
+        replyText = replyText || `✅ Updated ${tasksToUpdate.length} task(s).`;
       }
 
       const newTasks: Task[] = [];
@@ -239,7 +271,8 @@ const ChatInterface = () => {
             dueAt: t.dueAt,
             sourceChannel: 'WEB',
             subtasks: subtasks,
-            category: t.title.toLowerCase().includes('work') || t.title.toLowerCase().includes('meeting') || t.title.toLowerCase().includes('project') ? 'WORK' : 'PERSONAL'
+            category: t.category || (t.title.toLowerCase().includes('work') || t.title.toLowerCase().includes('meeting') || t.title.toLowerCase().includes('project') ? 'WORK' : 'PERSONAL'),
+            attachments: []
           };
           addTask(newTask);
           newTasks.push(newTask);

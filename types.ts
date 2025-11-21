@@ -73,6 +73,9 @@ export interface AiTaskDTO {
   estimatedMinutes?: number;
   dueAt?: string;
   decision?: TaskDecision;
+  category?: 'WORK' | 'PERSONAL';
+  priorityScore?: number;
+  status?: TaskStatus;
   subtasks?: AiSubTaskDTO[];
 }
 
@@ -82,9 +85,29 @@ export interface AiMeta {
   thought_process?: string;
 }
 
+export interface TaskFilter {
+  matchPhrase?: string;
+  category?: 'WORK' | 'PERSONAL';
+  status?: TaskStatus;
+  all?: boolean;
+}
+
+export interface TaskUpdates {
+  title?: string;
+  description?: string;
+  status?: TaskStatus;
+  decision?: TaskDecision;
+  priorityScore?: number;
+  dueAt?: string;
+  estimatedMinutes?: number;
+  category?: 'WORK' | 'PERSONAL';
+}
+
 export interface AiInterpretation {
-  intent: 'CREATE_TASKS' | 'UPDATE_TASK' | 'MARK_TASK_DONE' | 'ASK_WHAT_NEXT' | 'LIST_TASKS_SUMMARY' | 'LOG_TIME_SPENT' | 'SMALL_TALK';
+  intent: 'CREATE_TASKS' | 'UPDATE_TASKS' | 'MARK_TASK_DONE' | 'ASK_WHAT_NEXT' | 'LIST_TASKS_SUMMARY' | 'LOG_TIME_SPENT' | 'SMALL_TALK';
   tasks?: AiTaskDTO[];
+  updates?: TaskUpdates;
+  taskFilter?: TaskFilter;
   meta?: AiMeta;
 }
 
