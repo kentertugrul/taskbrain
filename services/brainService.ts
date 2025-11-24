@@ -127,6 +127,50 @@ export async function deleteBrainLink(linkId: string): Promise<void> {
     }
 }
 
+export async function restoreBrainNode(node: BrainNode): Promise<BrainNode> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { data, error } = await supabase
+        .from('brain_nodes')
+        .insert({
+            id: node.id,
+            user_id: user.id,
+            title: node.title,
+            description: node.description,
+            x: node.x,
+            y: node.y,
+            color: node.color,
+            created_at: node.created_at,
+        })
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+}
+
+export async function restoreBrainLink(link: BrainLink): Promise<BrainLink> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const { data, error } = await supabase
+        .from('brain_links')
+        .insert({
+            id: link.id,
+            user_id: user.id,
+            source_node_id: link.source_node_id,
+            target_node_id: link.target_node_id,
+            label: link.label,
+            created_at: link.created_at,
+        })
+        .select()
+        .single();
+
+    if (error) throw error;
+    return data;
+}
+
 // ============= Real-time Subscriptions =============
 
 export function subscribeToBrainNodes(callback: () => void) {

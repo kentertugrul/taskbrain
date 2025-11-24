@@ -4,7 +4,7 @@ import BrainNode from '../components/BrainNode';
 import BrainLink, { LinkMarkerDefs } from '../components/BrainLink';
 import BrainDetailPanel from '../components/BrainDetailPanel';
 import * as BrainService from '../services/brainService';
-import { Plus, ZoomIn, ZoomOut, Maximize2, Network } from 'lucide-react';
+import { Plus, ZoomIn, ZoomOut, Maximize2, Network, RotateCcw } from 'lucide-react';
 
 const MindMap = () => {
   const [nodes, setNodes] = useState<BrainNodeType[]>([]);
@@ -15,6 +15,7 @@ const MindMap = () => {
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState({ x: 0, y: 0 });
+  const [undoStack, setUndoStack] = useState<{ type: 'delete_node'; node: BrainNodeType; links: BrainLinkType[] }[]>([]);
 
   // Drag state
   const [draggedNodeId, setDraggedNodeId] = useState<string | null>(null);
@@ -61,10 +62,8 @@ const MindMap = () => {
 
       if (e.key === 'Backspace' || e.key === 'Delete') {
         if (selectedNodeId) {
-          if (confirm('Delete selected node?')) {
-            handleDeleteNode(selectedNodeId);
-            setSelectedNodeId(null);
-          }
+          handleDeleteNode(selectedNodeId);
+          setSelectedNodeId(null);
         }
         if (selectedLinkId) {
           // We need a delete link function, implementing it inline for now if service supports it
@@ -132,12 +131,53 @@ const MindMap = () => {
   };
 
   const handleDeleteNode = async (nodeId: string) => {
+    const nodeToDelete = nodes.find(n => n.id === nodeId);
+    if (!nodeToDelete) return;
+
+    const linksToDelete = links.filter(l => l.source_node_id === nodeId || l.target_node_id === nodeId);
+
     try {
-      await BrainService.deleteBrainNode(nodeId);
+      // Optimistic update
       setNodes(nodes.filter(n => n.id !== nodeId));
       setLinks(links.filter(l => l.source_node_id !== nodeId && l.target_node_id !== nodeId));
+
+      // Add to undo stack
+      setUndoStack(prev => [...prev, { type: 'delete_node', node: nodeToDelete, links: linksToDelete }]);
+
+      await BrainService.deleteBrainNode(nodeId);
     } catch (error) {
       console.error('Error deleting node:', error);
+      loadData(); // Revert on error
+    }
+  };
+
+  const handleUndo = async () => {
+    if (undoStack.length === 0) return;
+    const lastAction = undoStack[undoStack.length - 1];
+
+    if (lastAction.type === 'delete_node') {
+      try {
+        const { node, links: deletedLinks } = lastAction;
+
+        // Restore node
+        const restoredNode = await BrainService.restoreBrainNode(node);
+
+        // Restore links
+        const restoredLinks = await Promise.all(
+          deletedLinks.map(link => BrainService.restoreBrainLink(link))
+        );
+
+        setNodes(prev => [...prev, restoredNode]);
+        setLinks(prev => [...prev, ...restoredLinks]);
+        setUndoStack(prev => prev.slice(0, -1));
+
+        // Select restored node
+        setSelectedNodeId(restoredNode.id);
+        centerNode(restoredNode.id);
+      } catch (error) {
+        console.error('Error undoing delete:', error);
+        alert('Failed to undo delete');
+      }
     }
   };
 
@@ -334,6 +374,16 @@ const MindMap = () => {
 
       {/* Controls */}
       <div className="absolute top-4 right-4 z-10 flex gap-2">
+        <button
+          onClick={handleUndo}
+          disabled={undoStack.length === 0}
+          className={`bg-slate-900/80 backdrop-blur-sm border border-slate-800 p-2 rounded-lg transition-colors ${undoStack.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-800'
+            }`}
+          title="Undo Delete"
+        >
+          <RotateCcw size={18} className="text-slate-300" />
+        </button>
+        <div className="w-px h-8 bg-slate-800 mx-1" />
         <button
           onClick={handleAddNode}
           className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2 shadow-lg"
