@@ -22,12 +22,17 @@ const BrainDetailPanel: React.FC<BrainDetailPanelProps> = ({
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
     const [color, setColor] = useState('#6366F1');
+    const titleInputRef = React.useRef<HTMLInputElement>(null);
 
     useEffect(() => {
         if (node) {
             setTitle(node.title);
             setDescription(node.description || '');
             setColor(node.color);
+            // Auto-focus title input when node changes
+            setTimeout(() => {
+                titleInputRef.current?.focus();
+            }, 50);
         }
     }, [node]);
 
@@ -76,6 +81,7 @@ const BrainDetailPanel: React.FC<BrainDetailPanelProps> = ({
                         Title
                     </label>
                     <input
+                        ref={titleInputRef}
                         type="text"
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
@@ -114,8 +120,8 @@ const BrainDetailPanel: React.FC<BrainDetailPanelProps> = ({
                                     onUpdate(node.id, { color: preset });
                                 }}
                                 className={`w-full h-10 rounded-lg transition-all ${color === preset
-                                        ? 'ring-2 ring-white ring-offset-2 ring-offset-slate-900 scale-110'
-                                        : 'hover:scale-105'
+                                    ? 'ring-2 ring-white ring-offset-2 ring-offset-slate-900 scale-110'
+                                    : 'hover:scale-105'
                                     }`}
                                 style={{ backgroundColor: preset }}
                             />

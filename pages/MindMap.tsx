@@ -53,6 +53,30 @@ const MindMap = () => {
     };
   }, []);
 
+  // Handle keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't delete if user is typing in an input/textarea
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
+
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        if (selectedNodeId) {
+          if (confirm('Delete selected node?')) {
+            handleDeleteNode(selectedNodeId);
+            setSelectedNodeId(null);
+          }
+        }
+        if (selectedLinkId) {
+          // We need a delete link function, implementing it inline for now if service supports it
+          // For now, let's just handle node deletion as requested
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedNodeId, selectedLinkId, nodes, links]); // Dependencies for closure
+
   const loadData = async () => {
     try {
       const [fetchedNodes, fetchedLinks] = await Promise.all([
