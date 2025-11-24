@@ -34,12 +34,17 @@ const BrainDetailPanel: React.FC<BrainDetailPanelProps> = ({
                 titleInputRef.current?.focus();
             }, 50);
         }
-    }, [node]);
+    }, [node?.id]); // Only re-run when switching nodes
 
     if (!node) return null;
 
     const handleSave = () => {
         onUpdate(node.id, { title, description, color });
+    };
+
+    const handleSaveAndClose = () => {
+        handleSave();
+        onClose();
     };
 
     const handleDelete = () => {
@@ -167,13 +172,19 @@ const BrainDetailPanel: React.FC<BrainDetailPanelProps> = ({
             </div>
 
             {/* Footer */}
-            <div className="p-6 border-t border-slate-800">
+            <div className="p-6 border-t border-slate-800 flex gap-3">
+                <button
+                    onClick={handleSaveAndClose}
+                    className="flex-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors font-medium"
+                >
+                    Save & Close
+                </button>
                 <button
                     onClick={handleDelete}
-                    className="w-full px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors flex items-center justify-center gap-2"
+                    className="px-4 py-2 bg-red-600/10 hover:bg-red-600/20 text-red-500 hover:text-red-400 border border-red-600/20 rounded-lg transition-colors"
+                    title="Delete Node"
                 >
-                    <Trash2 size={16} />
-                    Delete Node
+                    <Trash2 size={20} />
                 </button>
             </div>
         </div>
