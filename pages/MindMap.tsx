@@ -381,7 +381,7 @@ const MindMap = () => {
             <Network size={18} className="text-white" />
           </div>
           <div>
-            <h3 className="font-bold text-white">Brain Diagram</h3>
+            <h3 className="font-bold text-white">Brain Diagram v2</h3>
             <p className="text-xs text-slate-400">{nodes.length} nodes • {links.length} connections</p>
           </div>
         </div>
