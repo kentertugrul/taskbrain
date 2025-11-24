@@ -10,6 +10,9 @@ interface BrainNodeProps {
     onHandleDragStart: (nodeId: string, position: 'top' | 'right' | 'bottom' | 'left', e: React.MouseEvent) => void;
     scale: number;
     visualScale?: number;
+    isEditing?: boolean;
+    onEditEnd?: (newTitle: string) => void;
+    onDoubleClick?: (nodeId: string) => void;
 }
 
 const BrainNode: React.FC<BrainNodeProps> = ({
@@ -19,8 +22,16 @@ const BrainNode: React.FC<BrainNodeProps> = ({
     onDragStart,
     onHandleDragStart,
     scale,
-    visualScale = 1 // Default to 1 if not provided
-}: BrainNodeProps & { visualScale?: number }) => {
+    visualScale = 1, // Default to 1 if not provided
+    isEditing = false,
+    onEditEnd,
+    onDoubleClick
+}: BrainNodeProps & {
+    visualScale?: number;
+    isEditing?: boolean;
+    onEditEnd?: (newTitle: string) => void;
+    onDoubleClick?: (nodeId: string) => void;
+}) => {
     const [isHovered, setIsHovered] = React.useState(false);
     const radius = 50;
     const handleSize = 12;
@@ -52,6 +63,10 @@ const BrainNode: React.FC<BrainNodeProps> = ({
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
             transform={`translate(${node.x}, ${node.y}) scale(${visualScale}) translate(${-node.x}, ${-node.y})`}
+            onDoubleClick={(e) => {
+                e.stopPropagation();
+                onDoubleClick?.(node.id);
+            }}
         >
             {/* Invisible Hit Area (prevents flickering when moving to handles) */}
             <circle
@@ -59,6 +74,7 @@ const BrainNode: React.FC<BrainNodeProps> = ({
                 cy={node.y}
                 r={radius + 20}
                 fill="transparent"
+                onMouseDown={handleMouseDown}
             />
 
             {/* Main Node Circle */}
@@ -67,29 +83,59 @@ const BrainNode: React.FC<BrainNodeProps> = ({
                 cy={node.y}
                 r={radius}
                 fill={node.color}
-                stroke={isSelected ? '#fff' : 'rgba(255, 255, 255, 0.3)'}
-                strokeWidth={isSelected ? 3 : 2}
-                className="cursor-move transition-all hover:brightness-110"
+                className={`transition-all duration-300 ${isSelected ? 'stroke-white stroke-2' : 'stroke-none'} shadow-lg`}
                 onMouseDown={handleMouseDown}
-                style={{
-                    filter: isSelected ? `drop-shadow(0 0 20px ${node.color})` : 'none',
-                }}
+                style={{ filter: 'drop-shadow(0 4px 6px rgb(0 0 0 / 0.3))' }}
             />
 
-            {/* Node Title */}
-            <text
-                x={node.x}
-                y={node.y}
-                textAnchor="middle"
-                dominantBaseline="middle"
-                fill="white"
-                fontSize={14}
-                fontWeight="600"
-                className="pointer-events-none select-none"
-                style={{ userSelect: 'none' }}
-            >
-                {node.title.length > 12 ? node.title.substring(0, 12) + '...' : node.title}
-            </text>
+            {/* Node Content */}
+            {isEditing ? (
+                <foreignObject
+                    x={node.x - 45}
+                    y={node.y - 15}
+                    width="90"
+                    height="30"
+                    className="overflow-visible"
+                >
+                    <input
+                        autoFocus
+                        defaultValue={node.title}
+                        onBlur={(e) => onEditEnd?.(e.target.value)}
+                        onKeyDown={(e) => {
+                            e.stopPropagation(); // Prevent global backspace/delete
+                            if (e.key === 'Enter') e.currentTarget.blur();
+                            if (e.key === 'Escape') onEditEnd?.(node.title);
+                        }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        style={{
+                            width: '100%',
+                            height: '100%',
+                            background: 'transparent',
+                            color: 'white',
+                            border: 'none',
+                            textAlign: 'center',
+                            outline: 'none',
+                            fontSize: '12px',
+                            fontWeight: '500',
+                            textShadow: '0 1px 2px rgba(0,0,0,0.5)'
+                        }}
+                    />
+                </foreignObject>
+            ) : (
+                <text
+                    x={node.x}
+                    y={node.y}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fill="white"
+                    fontSize={14}
+                    fontWeight="600"
+                    className="pointer-events-none select-none"
+                    style={{ userSelect: 'none' }}
+                >
+                    {node.title.length > 12 ? node.title.substring(0, 12) + '...' : node.title}
+                </text>
+            )}
 
             {/* Connection Handles */}
             {showHandles && (

@@ -11,7 +11,7 @@ const MindMap = () => {
   const [links, setLinks] = useState<BrainLinkType[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedLinkId, setSelectedLinkId] = useState<string | null>(null);
-  const [isNewNodeSelected, setIsNewNodeSelected] = useState(false);
+  const [editingNodeId, setEditingNodeId] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
@@ -116,7 +116,7 @@ const MindMap = () => {
       const newNode = await BrainService.createBrainNode(newNodeData);
       setNodes([...nodes, newNode]);
       setSelectedNodeId(newNode.id);
-      setIsNewNodeSelected(true);
+      setEditingNodeId(newNode.id);
     } catch (error: any) {
       console.error('Error creating node:', error);
       alert(`Failed to create node: ${error.message || 'Unknown error'}. Did you run the database migrations?`);
@@ -293,7 +293,7 @@ const MindMap = () => {
           setNodes([...nodes, newNode]);
           setLinks([...links, newLink]);
           setSelectedNodeId(newNode.id);
-          setIsNewNodeSelected(true);
+          setEditingNodeId(newNode.id);
         } catch (error) {
           console.error('Error creating node and link:', error);
         }
@@ -339,7 +339,18 @@ const MindMap = () => {
   const handleNodeSelect = (nodeId: string) => {
     setSelectedNodeId(nodeId);
     centerNode(nodeId);
-    setIsNewNodeSelected(false);
+    // Don't start editing on single click
+  };
+
+  const handleNodeDoubleClick = (nodeId: string) => {
+    setEditingNodeId(nodeId);
+  };
+
+  const handleNodeEditEnd = async (newTitle: string) => {
+    if (editingNodeId && newTitle.trim()) {
+      await handleUpdateNode(editingNodeId, { title: newTitle });
+    }
+    setEditingNodeId(null);
   };
 
   // Get connected nodes for detail panel
@@ -469,6 +480,9 @@ const MindMap = () => {
               onHandleDragStart={handleHandleDragStart}
               scale={zoom}
               visualScale={selectedNodeId ? (selectedNodeId === node.id ? 1.1 : 0.6) : 1}
+              isEditing={editingNodeId === node.id}
+              onEditEnd={handleNodeEditEnd}
+              onDoubleClick={handleNodeDoubleClick}
             />
           ))}
         </g>
@@ -483,7 +497,6 @@ const MindMap = () => {
           onUpdate={handleUpdateNode}
           onDelete={handleDeleteNode}
           onNavigateToNode={setSelectedNodeId}
-          autoFocus={isNewNodeSelected}
         />
       )}
 
