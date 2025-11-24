@@ -91,19 +91,22 @@ const BrainNode: React.FC<BrainNodeProps> = ({
             {/* Node Content */}
             {isEditing ? (
                 <foreignObject
-                    x={node.x - 45}
-                    y={node.y - 15}
-                    width="90"
-                    height="30"
+                    x={node.x - 40}
+                    y={node.y - 40}
+                    width="80"
+                    height="80"
                     className="overflow-visible"
                 >
-                    <input
+                    <textarea
                         autoFocus
                         defaultValue={node.title}
                         onBlur={(e) => onEditEnd?.(e.target.value)}
                         onKeyDown={(e) => {
                             e.stopPropagation(); // Prevent global backspace/delete
-                            if (e.key === 'Enter') e.currentTarget.blur();
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                                e.preventDefault();
+                                e.currentTarget.blur();
+                            }
                             if (e.key === 'Escape') onEditEnd?.(node.title);
                         }}
                         onMouseDown={(e) => e.stopPropagation()}
@@ -117,24 +120,43 @@ const BrainNode: React.FC<BrainNodeProps> = ({
                             outline: 'none',
                             fontSize: '12px',
                             fontWeight: '500',
-                            textShadow: '0 1px 2px rgba(0,0,0,0.5)'
+                            textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+                            resize: 'none',
+                            padding: '4px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
                         }}
                     />
                 </foreignObject>
             ) : (
-                <text
-                    x={node.x}
-                    y={node.y}
-                    textAnchor="middle"
-                    dominantBaseline="middle"
-                    fill="white"
-                    fontSize={14}
-                    fontWeight="600"
-                    className="pointer-events-none select-none"
-                    style={{ userSelect: 'none' }}
+                <foreignObject
+                    x={node.x - 40}
+                    y={node.y - 40}
+                    width="80"
+                    height="80"
+                    className="pointer-events-none"
                 >
-                    {node.title.length > 12 ? node.title.substring(0, 12) + '...' : node.title}
-                </text>
+                    <div
+                        style={{
+                            width: '100%',
+                            height: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            textAlign: 'center',
+                            color: 'white',
+                            fontSize: '12px',
+                            fontWeight: '600',
+                            wordWrap: 'break-word',
+                            lineHeight: '1.2',
+                            textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+                            userSelect: 'none'
+                        }}
+                    >
+                        {node.title}
+                    </div>
+                </foreignObject>
             )}
 
             {/* Connection Handles */}

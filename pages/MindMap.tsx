@@ -488,8 +488,8 @@ const MindMap = () => {
         </g>
       </svg>
 
-      {/* Detail Panel */}
-      {selectedNode && (
+      {/* Detail Panel - Removed for flow focus */}
+      {/* {selectedNode && (
         <BrainDetailPanel
           node={selectedNode}
           connectedNodes={getConnectedNodes(selectedNode.id)}
@@ -498,7 +498,7 @@ const MindMap = () => {
           onDelete={handleDeleteNode}
           onNavigateToNode={setSelectedNodeId}
         />
-      )}
+      )} */}
 
       {/* Empty State */}
       {nodes.length === 0 && (
