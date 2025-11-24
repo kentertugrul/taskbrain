@@ -9,6 +9,7 @@ interface BrainNodeProps {
     onDragStart: (nodeId: string, e: React.MouseEvent) => void;
     onHandleDragStart: (nodeId: string, position: 'top' | 'right' | 'bottom' | 'left', e: React.MouseEvent) => void;
     scale: number;
+    visualScale?: number;
 }
 
 const BrainNode: React.FC<BrainNodeProps> = ({
@@ -17,8 +18,9 @@ const BrainNode: React.FC<BrainNodeProps> = ({
     onSelect,
     onDragStart,
     onHandleDragStart,
-    scale
-}) => {
+    scale,
+    visualScale = 1 // Default to 1 if not provided
+}: BrainNodeProps & { visualScale?: number }) => {
     const [isHovered, setIsHovered] = React.useState(false);
     const radius = 50;
     const handleSize = 12;
@@ -46,9 +48,10 @@ const BrainNode: React.FC<BrainNodeProps> = ({
 
     return (
         <g
-            className="brain-node"
+            className="brain-node transition-transform duration-500 ease-in-out"
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
+            transform={`translate(${node.x}, ${node.y}) scale(${visualScale}) translate(${-node.x}, ${-node.y})`}
         >
             {/* Invisible Hit Area (prevents flickering when moving to handles) */}
             <circle

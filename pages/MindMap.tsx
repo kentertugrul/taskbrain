@@ -92,8 +92,9 @@ const MindMap = () => {
       const newNode = await BrainService.createBrainNode(newNodeData);
       setNodes([...nodes, newNode]);
       setSelectedNodeId(newNode.id);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error creating node:', error);
+      alert(`Failed to create node: ${error.message || 'Unknown error'}. Did you run the database migrations?`);
     }
   };
 
@@ -255,6 +256,24 @@ const MindMap = () => {
     setPan({ x: 0, y: 0 });
   };
 
+  const centerNode = (nodeId: string) => {
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node || !containerRef.current) return;
+
+    const containerWidth = containerRef.current.clientWidth;
+    const containerHeight = containerRef.current.clientHeight;
+
+    const newPanX = (containerWidth / (2 * zoom)) - node.x;
+    const newPanY = (containerHeight / (2 * zoom)) - node.y;
+
+    setPan({ x: newPanX, y: newPanY });
+  };
+
+  const handleNodeSelect = (nodeId: string) => {
+    setSelectedNodeId(nodeId);
+    centerNode(nodeId);
+  };
+
   // Get connected nodes for detail panel
   const getConnectedNodes = (nodeId: string) => {
     const connected: { node: BrainNodeType; label?: string }[] = [];
@@ -331,7 +350,10 @@ const MindMap = () => {
         </defs>
         <rect width="100%" height="100%" fill="url(#grid)" opacity="0.5" />
 
-        <g transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}>
+        <g
+          transform={`translate(${pan.x}, ${pan.y}) scale(${zoom})`}
+          className="transition-transform duration-500 ease-in-out"
+        >
           {/* Render Links */}
           {links.map(link => (
             <BrainLink
@@ -364,10 +386,11 @@ const MindMap = () => {
               key={node.id}
               node={node}
               isSelected={selectedNodeId === node.id}
-              onSelect={setSelectedNodeId}
+              onSelect={handleNodeSelect}
               onDragStart={handleNodeDragStart}
               onHandleDragStart={handleHandleDragStart}
               scale={zoom}
+              visualScale={selectedNodeId ? (selectedNodeId === node.id ? 1.1 : 0.6) : 1}
             />
           ))}
         </g>
