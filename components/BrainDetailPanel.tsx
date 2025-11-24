@@ -9,6 +9,7 @@ interface BrainDetailPanelProps {
     onUpdate: (nodeId: string, updates: { title?: string; description?: string; color?: string }) => void;
     onDelete: (nodeId: string) => void;
     onNavigateToNode: (nodeId: string) => void;
+    autoFocus?: boolean;
 }
 
 const BrainDetailPanel: React.FC<BrainDetailPanelProps> = ({
@@ -18,6 +19,7 @@ const BrainDetailPanel: React.FC<BrainDetailPanelProps> = ({
     onUpdate,
     onDelete,
     onNavigateToNode,
+    autoFocus = false,
 }) => {
     const [title, setTitle] = useState('');
     const [description, setDescription] = useState('');
@@ -29,12 +31,15 @@ const BrainDetailPanel: React.FC<BrainDetailPanelProps> = ({
             setTitle(node.title);
             setDescription(node.description || '');
             setColor(node.color);
-            // Auto-focus title input when node changes
-            setTimeout(() => {
-                titleInputRef.current?.focus();
-            }, 50);
+
+            // Only auto-focus if explicitly requested (e.g. new node)
+            if (autoFocus) {
+                setTimeout(() => {
+                    titleInputRef.current?.focus();
+                }, 50);
+            }
         }
-    }, [node?.id]); // Only re-run when switching nodes
+    }, [node?.id, autoFocus]); // Only re-run when switching nodes
 
     if (!node) return null;
 
@@ -91,6 +96,11 @@ const BrainDetailPanel: React.FC<BrainDetailPanelProps> = ({
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
                         onBlur={handleSave}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                handleSaveAndClose();
+                            }
+                        }}
                         className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                         placeholder="Node title"
                     />

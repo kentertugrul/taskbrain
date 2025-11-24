@@ -11,6 +11,7 @@ const MindMap = () => {
   const [links, setLinks] = useState<BrainLinkType[]>([]);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedLinkId, setSelectedLinkId] = useState<string | null>(null);
+  const [isNewNodeSelected, setIsNewNodeSelected] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
@@ -115,6 +116,7 @@ const MindMap = () => {
       const newNode = await BrainService.createBrainNode(newNodeData);
       setNodes([...nodes, newNode]);
       setSelectedNodeId(newNode.id);
+      setIsNewNodeSelected(true);
     } catch (error: any) {
       console.error('Error creating node:', error);
       alert(`Failed to create node: ${error.message || 'Unknown error'}. Did you run the database migrations?`);
@@ -291,6 +293,7 @@ const MindMap = () => {
           setNodes([...nodes, newNode]);
           setLinks([...links, newLink]);
           setSelectedNodeId(newNode.id);
+          setIsNewNodeSelected(true);
         } catch (error) {
           console.error('Error creating node and link:', error);
         }
@@ -336,6 +339,7 @@ const MindMap = () => {
   const handleNodeSelect = (nodeId: string) => {
     setSelectedNodeId(nodeId);
     centerNode(nodeId);
+    setIsNewNodeSelected(false);
   };
 
   // Get connected nodes for detail panel
@@ -479,6 +483,7 @@ const MindMap = () => {
           onUpdate={handleUpdateNode}
           onDelete={handleDeleteNode}
           onNavigateToNode={setSelectedNodeId}
+          autoFocus={isNewNodeSelected}
         />
       )}
 
