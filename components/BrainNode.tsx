@@ -19,6 +19,7 @@ const BrainNode: React.FC<BrainNodeProps> = ({
     onHandleDragStart,
     scale
 }) => {
+    const [isHovered, setIsHovered] = React.useState(false);
     const radius = 50;
     const handleSize = 12;
     const handleOffset = radius + 8;
@@ -41,8 +42,22 @@ const BrainNode: React.FC<BrainNodeProps> = ({
         onHandleDragStart(node.id, position, e);
     };
 
+    const showHandles = isSelected || isHovered;
+
     return (
-        <g className="brain-node">
+        <g
+            className="brain-node"
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+        >
+            {/* Invisible Hit Area (prevents flickering when moving to handles) */}
+            <circle
+                cx={node.x}
+                cy={node.y}
+                r={radius + 20}
+                fill="transparent"
+            />
+
             {/* Main Node Circle */}
             <circle
                 cx={node.x}
@@ -73,12 +88,21 @@ const BrainNode: React.FC<BrainNodeProps> = ({
                 {node.title.length > 12 ? node.title.substring(0, 12) + '...' : node.title}
             </text>
 
-            {/* Connection Handles - Only show when selected */}
-            {isSelected && (
+            {/* Connection Handles */}
+            {showHandles && (
                 <>
                     {(['top', 'right', 'bottom', 'left'] as const).map((position) => (
                         <g key={position}>
-                            {/* Handle Circle */}
+                            {/* Handle Hit Area (Larger invisible target) */}
+                            <circle
+                                cx={handlePositions[position].x}
+                                cy={handlePositions[position].y}
+                                r={handleSize + 5}
+                                fill="transparent"
+                                className="cursor-pointer"
+                                onMouseDown={handleHandleMouseDown(position)}
+                            />
+                            {/* Visible Handle Circle */}
                             <circle
                                 cx={handlePositions[position].x}
                                 cy={handlePositions[position].y}
@@ -86,8 +110,7 @@ const BrainNode: React.FC<BrainNodeProps> = ({
                                 fill="#10b981"
                                 stroke="#fff"
                                 strokeWidth={2}
-                                className="cursor-pointer transition-all hover:scale-125"
-                                onMouseDown={handleHandleMouseDown(position)}
+                                className="pointer-events-none" // Events handled by hit area
                                 style={{
                                     filter: 'drop-shadow(0 0 8px rgba(16, 185, 129, 0.8))',
                                 }}
